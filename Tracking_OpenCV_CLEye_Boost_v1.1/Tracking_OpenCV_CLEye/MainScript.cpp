@@ -223,7 +223,7 @@ int _tmain(int argc, _TCHAR* argv[])
 	}
 	
 	// Open serial port
-	ArduinoSerialInterface asInterface = *new ArduinoSerialInterface(L"\\\\.\\COM41");
+	ArduinoSerialInterface asInterface = *new ArduinoSerialInterface(L"\\\\.\\COM4");
 	bool opened = asInterface.openComPort();
 	if(!opened) {
 		cout << "Failed to open serial port!" << endl;
@@ -308,6 +308,7 @@ int _tmain(int argc, _TCHAR* argv[])
 
 		//extract puck position from image, maintain state variables
 		int trackStatus = puckTracker.UpdatePuckState(imgOriginal);
+		int robotStatus = robotTracker.UpdatePuckState(imgOriginal);
 		bool positionUpdated = trackStatus & 1 == 1, velocityUpdated = trackStatus & 2 == 2;
 		//if(!(trackStatus & 1 == 1)) { continue; }	//go to next iteration if position wasn't updated
 
@@ -527,8 +528,11 @@ int _tmain(int argc, _TCHAR* argv[])
 				}
 				colorCycler++; if(colorCycler > 2) { colorCycler = 0; }
 				*/
-			mtx.try_lock(); line(imgLines, Point(xPC, yPC), Point(puckTracker.prev_xPC, puckTracker.prev_yPC),
-				Scalar(0,0,255), 2); mtx.unlock();
+			mtx.try_lock(); 
+			line(imgLines, Point(xPC, yPC), Point(puckTracker.prev_xPC, puckTracker.prev_yPC), Scalar(0,0,255), 2); 
+			cout << robotTracker.xPC << "," << robotTracker.yPC << "\t" << robotTracker.prev_xPC << "," << robotTracker.prev_yPC;
+			line(imgLines, Point(robotTracker.xPC, robotTracker.yPC), Point(robotTracker.prev_xPC, robotTracker.prev_yPC), Scalar(0,255,0), 2); 
+			mtx.unlock();
 				//cout << "lines added" << endl;
 			//}
 
