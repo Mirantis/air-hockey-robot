@@ -27,7 +27,7 @@ PVOID latency = NULL;
 #define TDEF_MIN 0.02
 #define YATT_HIGH 33
 #define YATT_LOW 3.45
-#define TATT_MIN 0.33
+#define TATT_MIN 0.29
 #pragma endregion
 
 #pragma region Variables
@@ -39,7 +39,7 @@ boost::mutex mtx;
 
 // OpenCV and Camera Capture Vars //
 Mat imgCapture, imgLines;
-bool displayEnabled = true;		//enable to show camera output -- slows down compute cycle time significantly
+bool displayEnabled = false;		//enable to show camera output -- slows down compute cycle time significantly
 bool loggingEnabled = false;	//enable to log data to asdf.txt
 bool cameraUpdated = false;
 
@@ -223,7 +223,7 @@ int _tmain(int argc, _TCHAR* argv[])
 	}
 	
 	// Open serial port
-	ArduinoSerialInterface asInterface = *new ArduinoSerialInterface(L"\\\\.\\COM4");
+	ArduinoSerialInterface asInterface = *new ArduinoSerialInterface(L"\\\\.\\COM41");
 	bool opened = asInterface.openComPort();
 	if(!opened) {
 		cout << "Failed to open serial port!" << endl;
@@ -279,19 +279,22 @@ int _tmain(int argc, _TCHAR* argv[])
 	bool filtPointsReqSet = false, ricochetDetected = false;
 	int filtPoints = 0, filtPointsReq = 4;
 	long prevCommandTime = 0, prevState1Time = 0;
-	int vPxHighCounter = 0, vPxNegCounter = 0, retransmitCounter = 0;
+	int vPxHighCounter = 0, vPxHigh2Counter = 0, vPxNegCounter = 0, retransmitCounter = 0;
 	float loopTime = 0, timeInState1 = 0, state1Timeout = 1;	//seconds
 	// object tracking //
 	// towards: puck moving towards robot, away: puck moving away from robot, decision: latest x-value at which attack/defense must be picked
 	float xThreshold_towards = 50, xThreshold_away = 30, xThreshold_decision = 35;
 	float xPTfilt = 0, yPTfilt = 0, vPxfilt = 0, vPyfilt = 0;
+	float xFloatingVMin = -40, xFloatingVMax = 40, xFloatingLimit = 28;
+	int noPuckCounter = 0;
 
 	int state = 0, prev_state = -1;
 	/*
-	enum state {
-		IDLE = 0;
-		PUCK_TWD_ROBOT = 1;
-		PUCK_TWD_PLAYER = 2;
+	enum StateTypes {
+		IDLE = 0,
+		PUCK_TWD_ROBOT = 1,
+		TRANSMIT_ATKDEF = 2,
+		RECENTER = 3
 	};
 	*/
 	while(true) {
@@ -311,6 +314,9 @@ int _tmain(int argc, _TCHAR* argv[])
 		int robotStatus = robotTracker.UpdatePuckState(imgOriginal);
 		bool positionUpdated = trackStatus & 1 == 1, velocityUpdated = trackStatus & 2 == 2;
 		//if(!(trackStatus & 1 == 1)) { continue; }	//go to next iteration if position wasn't updated
+		//if(!(trackStatus & 1 == 1)) { continue; }	//go to next iteration if position wasn't updated
+
+		noPuckCounter = velocityUpdated ? 0 : noPuckCounter + 1;
 
 		//if(state == 1) { cout << xPT << "," << yPT << "\t" << vPx << "\t" << vPy << endl; }
 		//cout << positionUpdated << "," << velocityUpdated << "\t" << puckTracker.xPC << "," << puckTracker.yPC;
@@ -319,8 +325,8 @@ int _tmain(int argc, _TCHAR* argv[])
 		//predict trajectory
 		Mat imgTrajectory = Mat::zeros( imgOriginal.size(), CV_8UC4 );
 
-		vPxHighCounter = vPx > 1 ? vPxHighCounter + 1 : 0;
-		vPxNegCounter = vPx < -1 ? vPxNegCounter + 1 : 0;
+		vPxHighCounter = vPx > xFloatingVMin ? vPxHighCounter + 1 : 0;
+		vPxNegCounter = vPx < xFloatingVMin ? vPxNegCounter + 1 : 0;
 
 		#pragma region "State Machine"
 		int next_state = state;
@@ -333,10 +339,11 @@ int _tmain(int argc, _TCHAR* argv[])
 				//if(!arduinoReady) { arduinoReady = __; }
 				arduinoReady = true;
 
+			
 				// state transitions -- wait for puck to come towards robot //
 				next_state = arduinoReady && vPxNegCounter > 1 && xPT <= xThreshold_towards ? 1 : 0;	//transition to receive puck
 				//next_state = xPT >= xThreshold_away && vPxHighCounter > 2 && !recenterLock ? 3 : next_state;	//recenter if puck moving away
-				next_state = vPxHighCounter > 0 && !recenterLock ? 3 : next_state;	//recenter if puck moving away
+				next_state = (vPxHighCounter > 0 && !recenterLock || noPuckCounter >= 5) ? 3 : next_state;	//recenter if puck moving away
 
 				// exit actions
 				if(next_state == 1) {
@@ -371,6 +378,10 @@ int _tmain(int argc, _TCHAR* argv[])
 					// state actions -- predict puck trajectory, decide on attack/defense when conditions met
 					puckTracker.PredictPuckTrajectory(&imgTrajectory, displayEnabled, numberOfCritXvalues, critXvalues,
 						critYvalues, critTvalues, critVyvalues);
+
+					cout << "Curr: " << xPT << "," << yPT << "\t" << vPx << "," << vPy << endl;
+					//cout << "Crit1: " << critXvalues[1] << "," << critYvalues[1] << "," << critTvalues[1] << endl;
+					//cout << "Crit4: " << critXvalues[4] << "," << critYvalues[4] << "," << critTvalues[4] << endl;
 
 					// check time at critXvalues[1] -- attack point
 					xAtt = critXvalues[1]; yAtt += critYvalues[1]; tAtt += critTvalues[1];
@@ -417,10 +428,10 @@ int _tmain(int argc, _TCHAR* argv[])
 					}
 				}
 				timeInState1 += loopTime;
-				cout << "Time: " << timeInState1 << endl;
+				//cout << "Time: " << timeInState1 << endl;
 
 				// state transitions
-				next_state = timeInState1 > state1Timeout ? 0 : 1;	//timeout after 5 seconds to avoid getting stuck waiting for more points
+				next_state = timeInState1 > state1Timeout ? 0 : 1;	//timeout after 1 second to avoid getting stuck waiting for more points
 				next_state = decide ? 2 : next_state;	//retransmit attack or defense command
 				next_state = decide && vPxfilt > 1 || noMoves ? 0 : next_state;
 				//next_state = xPT >= xThreshold_away && vPx > 1 ? 3 : next_state;
@@ -480,6 +491,11 @@ int _tmain(int argc, _TCHAR* argv[])
 					centerHomeY = vPx > 1 && vPx < 175;	//decide whether shot is slow enough to centerhome y-axis
 					retransmitCounter = 3;
 				}
+
+				if (vPx >= xFloatingVMin && vPx <= xFloatingVMax && xPT <= xFloatingLimit) {
+					asInterface.sendDefendCommand(xPT, yPT, 0.001); recenterLock = false;
+					break;
+				}
 				
 				if(recenterLock) { next_state = 0; break; }
 
@@ -487,7 +503,7 @@ int _tmain(int argc, _TCHAR* argv[])
 					cout << "Retransmitting..." << endl;
 					asInterface.sendRecenterCommand(centerHomeY);
 				}
-				
+
 				next_state = asInterface.recenterCmdAcked ? 0 : 3;
 				if(next_state != 3) { recenterLock = true; }
 				break;
@@ -530,7 +546,6 @@ int _tmain(int argc, _TCHAR* argv[])
 				*/
 			mtx.try_lock(); 
 			line(imgLines, Point(xPC, yPC), Point(puckTracker.prev_xPC, puckTracker.prev_yPC), Scalar(0,0,255), 2); 
-			cout << robotTracker.xPC << "," << robotTracker.yPC << "\t" << robotTracker.prev_xPC << "," << robotTracker.prev_yPC;
 			line(imgLines, Point(robotTracker.xPC, robotTracker.yPC), Point(robotTracker.prev_xPC, robotTracker.prev_yPC), Scalar(0,255,0), 2); 
 			mtx.unlock();
 				//cout << "lines added" << endl;

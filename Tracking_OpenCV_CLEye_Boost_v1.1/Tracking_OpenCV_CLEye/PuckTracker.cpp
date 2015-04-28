@@ -187,6 +187,9 @@ int PuckTracker::PredictPuckTrajectory(Mat *imgTrajectory, bool displayEnabled, 
 		int critXindex = 0;
 		//float critYvalues[numberOfCritXvalues], critTvalues[numberOfCritXvalues];
 
+		// need to clear out values of critY, critT when xTrajectory[0] exceeds critX, i.e. puck has already passed critX value
+
+		// fill critY, critT, critVy with values according to predicted trajectory
 		for(int i=0; i<tTrajectory.size() - 1; i++)
 		{
 			float t = tTrajectory[i], x = xTrajectory[i], y = yTrajectory[i];
@@ -205,7 +208,8 @@ int PuckTracker::PredictPuckTrajectory(Mat *imgTrajectory, bool displayEnabled, 
 			while(critXindex < numCritXvalues && nextX <= critXvalues[critXindex]) {
 				float critX = critXvalues[critXindex];
 				float tOnThisPath = (critX - x) / vx;
-				critTvalues[critXindex] = t + tOnThisPath;
+				float v = sqrt(pow(vx,2) + pow(vy,2));
+				critTvalues[critXindex] = t + tOnThisPath - abs(rPuck/v);
 				critYvalues[critXindex] = y + vy * tOnThisPath;
 				critVyvalues[critXindex] = vy;
 			
