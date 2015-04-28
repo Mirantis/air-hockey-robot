@@ -221,11 +221,12 @@ void loop() {
       
       // state transitions
       // return to idle state if defending
-      next_state = target1reached && defend ? 0 : 1;
+      next_state = recenterRequest || goalScored ? 3 : 1;
+      next_state = target1reached && defend ? 0 : next_state;
       //next_state = getAbsolute(xR-xT1) && getAbsolute(yR-yT1) < 0.4 ? 0 : 1;
       // stay in this state to continue updating position until it's time to attack
       //next_state = target1reached && attack && tT2 <= xTau2 + 0.80 ? 2 : next_state;
-      next_state = attackAngled ? 2 : next_state;
+      next_state = attackAngled ? 4 : next_state;
       next_state = attackStraight ? 2 : next_state;
       
       // state exit actions
@@ -432,7 +433,7 @@ void loop() {
         float yTarget = ay > 0 ? yBoundHigh : yBoundLow;  //set new yTarget to move through puck point
         ySpd = dir*ySpd_max;
         
-        bool olTargetReached = moveWithOpenLoopRampDown(xT2, yT2, 0.01, loopTimeSecs);
+        bool olTargetReached = moveWithOpenLoopRampDown(xT2, yTarget, 0.01, loopTimeSecs);
       }
       
       if(debugMode) {
@@ -782,6 +783,7 @@ void respondToSerialCmd()
     if(!(attackStraight || attackAngled)) { defend = true; }
     xT1 = check_xT1; yT1 = check_yT1; //tT1 = check_tT1; //tT1 = check_tT1/2;
     tT1 = 0.01;
+    xRampDown = false; yRampDown = false;
     
     SendAck(startDefenseCmd);
     FlushSerialInput();
