@@ -22,8 +22,8 @@ PVOID latency = NULL;
 #define CAM_PIX_HEIGHT 240
 #define numberOfCritXvalues 5
 #define PI 3.14159265358979323846
-#define YDEF_HIGH 29
-#define YDEF_LOW 10
+#define YDEF_HIGH 33
+#define YDEF_LOW 7
 #define TDEF_MIN 0.02
 #define YATT_HIGH 33
 #define YATT_LOW 3.45
@@ -285,7 +285,7 @@ int _tmain(int argc, _TCHAR* argv[])
 	// towards: puck moving towards robot, away: puck moving away from robot, decision: latest x-value at which attack/defense must be picked
 	float xThreshold_towards = 50, xThreshold_away = 30, xThreshold_decision = 35;
 	float xPTfilt = 0, yPTfilt = 0, vPxfilt = 0, vPyfilt = 0;
-	float xFloatingVMin = -40, xFloatingVMax = 20, xFloatingLimit = 25;
+	float xFloatingVMin = -20, xFloatingVMax = 20, xFloatingLimit = 25;
 	int noPuckCounter = 0;
 	boolean forceRecenter = false;
 
@@ -332,7 +332,7 @@ int _tmain(int argc, _TCHAR* argv[])
 
 		vPxHighCounter = vPx > xFloatingVMax ? vPxHighCounter + 1 : 0;
 		vPxNegCounter = vPx < xFloatingVMin ? vPxNegCounter + 1 : 0;
-		vPxFloatingCounter = vPxHighCounter || vPxNegCounter ? 0 : vPxFloatingCounter +1; 
+		vPxFloatingCounter = vPxHighCounter || vPxNegCounter ? 0 : vPxFloatingCounter + 1; 
 
 		if (vPxHighCounter % 100 == 1 || vPxNegCounter %100 == 1 || vPxFloatingCounter % 100 == 1) {
 			cout << "C: " << xPT << "," << yPT << "\t" << vPx << "," << vPy << "\t" << vPxHighCounter << "," << vPxNegCounter << "," << vPxFloatingCounter << endl;
@@ -346,9 +346,11 @@ int _tmain(int argc, _TCHAR* argv[])
 				if(prev_state != 0) { cout << "Entered state 0" << endl; }
 
 				if (noPuckCounter == 0 && vPxFloatingCounter >= 5 && xPT <= xFloatingLimit) {
-					cout << "Puching the puck: " << xPT << "," << yPT << endl;
+					float nx = xPT + vPx / 10.0;
+					float ny = yPT + vPy / 10.0;
+					cout << "Puching the puck: " << nx << "," << ny << endl;
 
-					asInterface.sendDefendCommand(xPT + vPx / 10.0, yPT + vPy / 10.0, 0.001);
+					asInterface.sendDefendCommand(nx, ny, 0.001);
 					next_state = 0;
 					recenterLock = false;
 					break;
@@ -570,7 +572,7 @@ int _tmain(int argc, _TCHAR* argv[])
 				*/
 			mtx.try_lock(); 
 			line(imgLines, Point(xPC, yPC), Point(puckTracker.prev_xPC, puckTracker.prev_yPC), Scalar(0,0,255), 2); 
-			line(imgLines, Point(robotTracker.xPC, robotTracker.yPC), Point(robotTracker.prev_xPC, robotTracker.prev_yPC), Scalar(0,255,0), 2); 
+			//line(imgLines, Point(robotTracker.xPC, robotTracker.yPC), Point(robotTracker.prev_xPC, robotTracker.prev_yPC), Scalar(0,255,0), 2); 
 			mtx.unlock();
 				//cout << "lines added" << endl;
 			//}

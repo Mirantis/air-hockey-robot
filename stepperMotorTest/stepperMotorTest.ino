@@ -17,7 +17,7 @@ float encoderPPR = 195;
 int leftDir = 1;
 //float rampRate = 20000;
 //float xRampRate = 2250, yRampRate = 8000;   //motor acceleration in rpm/s2
-float xRampRate = 2250, yRampRate = 7000;   //motor acceleration in rpm/s2
+float xRampRate = 2250, yRampRate = 6000;   //motor acceleration in rpm/s2
 float yRampInit = 7000;  //used to reset ramp rate after changing it
 float xRampLow = 2250, xRampHigh = 2250;
 //float xRampRate = 2000, yRampRate = 5000;   //motor acceleration in rpm/s2
