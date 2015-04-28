@@ -6,8 +6,11 @@ PuckTracker::~PuckTracker() {}
 PuckTracker::PuckTracker(float _rPuck, HSVBounds _bounds)
 {
 	// initialize vars
-	xPC = 0, yPC = 0, prev_xPC = 0, prev_yPC = 0;
-	xPT = 0, yPT = 0, prev_xPT = 0, prev_yPT = 0;
+	xPC = 0; yPC = 0; prev_xPC = 0; prev_yPC = 0;
+	xPT = 0; yPT = 0; prev_xPT = 0; prev_yPT = 0;
+	accelPx = 0; accelPy = 0;
+	vPxfilt = 0; vPyfilt = 0;
+	tNextRicochet = -1;
 	updateVelocityCounter = 0; oldVelocityTimestamp = -1;
 
 	rPuck = _rPuck;
@@ -114,16 +117,27 @@ int PuckTracker::UpdatePuckState(Mat imgOriginal)
 					//if(vPy*prev_vPy > 0) { vPy = (2*vPy + prev_vPy + accelPy*dt)/3; }
 
 					//accelPx = (vPx - prev_vPx)/dt; accelPy = (vPy - prev_vPy)/dt;
+					UpdateVelocityFilter(dt);
+
 					prev_xPT = xPT; prev_yPT = yPT; velocityUpdated = true;
 					prev_xPC = xPC; prev_yPC = yPC;
+					prev_vPx = vPx; prev_vPy = vPy;
 					updateVelocityCounter = 0;
-					returnFlags += 2;
+					returnFlags |= 2;
 				}
-				returnFlags += 1;
+				returnFlags |= 1;
 			}
 		}
 	}
 	return returnFlags;
+}
+
+void PuckTracker::UpdateVelocityFilter(double dt)
+{
+	if(prev_vPx*vPx > 1) { vPx = (prev_vPx + 2*vPx)/3; }	//check if velocity changed direction
+	else { xRicochetOccurred = true; }
+	if(prev_vPy*vPy > 1) { vPy = (prev_vPy + 2*vPy)/3; }
+	else { yRicochetOccurred = true; }
 }
 
 // return int is binary flag set: 1 - ricochet detected
@@ -170,7 +184,10 @@ int PuckTracker::PredictPuckTrajectory(Mat *imgTrajectory, bool displayEnabled, 
 						
 					cout << "Added ricochet: " << t + tRicochet << "\t" << xRicochet << "," << yRicochet;
 					cout << "\t" << vPx << "," << vPy << endl;
-					returnFlags += 1;
+					returnFlags |= 1;
+
+					// Update next ricochet time to allow velocity filter to prepare
+					if(abs(tNextRicochet - -1) < 0.001) { tNextRicochet = t + tRicochet; }
 				}
 				else {
 					done = true;

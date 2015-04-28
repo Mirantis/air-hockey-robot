@@ -40,13 +40,19 @@ public:
 	float vPx, vPy, prev_vPx, prev_vPy;
 	float accelPx, accelPy;
 	float rPuck;
-	
+
+	float vPxfilt, vPyfilt;
+	float tNextRicochet;
+
+	bool xRicochetOccurred, yRicochetOccurred;
+
 	// Methods
 	int UpdatePuckState(Mat imgOriginal);
 	int PredictPuckTrajectory(Mat *imgTrajectory, bool displayEnabled, int numCritXvalues, float *critXvalues,
 		float *critYvalues, float *critTvalues, float *critVyvalues);
 	
 private:
+	void UpdateVelocityFilter(double dt);
 	void convertFromCameraToTableFrame(float xC, float yC, float* xT, float* yT);
 	void convertFromTableToCameraFrame(float xT, float yT, float* xC, float* yC);
 	float xBoundLow, xBoundHigh, yBoundLow, yBoundHigh;

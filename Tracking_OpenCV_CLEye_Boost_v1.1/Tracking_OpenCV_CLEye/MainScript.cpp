@@ -277,7 +277,7 @@ int _tmain(int argc, _TCHAR* argv[])
 	float tAttThreshold = 0.33, tDefThreshold = 0.02;	//minimum required value of tAtt to send attack command
 	bool arduinoReady = false, attInRange = false, defInRange = false, recenterLock = false, centerHomeY = false;
 	bool filtPointsReqSet = false, ricochetDetected = false;
-	int filtPoints = 0, filtPointsReq = 4;
+	int filtPoints = 0, filtPointsReq = 4, origFiltPoints = 4;
 	long prevCommandTime = 0, prevState1Time = 0;
 	int vPxHighCounter = 0, vPxHigh2Counter = 0, vPxNegCounter = 0, retransmitCounter = 0;
 	float loopTime = 0, timeInState1 = 0, state1Timeout = 1;	//seconds
@@ -373,11 +373,19 @@ int _tmain(int argc, _TCHAR* argv[])
 						else { filtPointsReq = 4; }
 						filtPointsReqSet = true;
 					}
-					filtPoints++;
 
 					// state actions -- predict puck trajectory, decide on attack/defense when conditions met
 					puckTracker.PredictPuckTrajectory(&imgTrajectory, displayEnabled, numberOfCritXvalues, critXvalues,
 						critYvalues, critTvalues, critVyvalues);
+
+					// clear filter and only require 2 points after a ricochet
+					if(puckTracker.yRicochetOccurred) {
+						xDef = 0; yDef = 0; tDef = 0; xAtt = 0; yAtt = 0; tAtt = 0;
+						filtPointsReq = 2; filtPoints = 0;
+						puckTracker.yRicochetOccurred = false;	//clear flag
+					}
+
+					filtPoints++;
 
 					cout << "Curr: " << xPT << "," << yPT << "\t" << vPx << "," << vPy << endl;
 					//cout << "Crit1: " << critXvalues[1] << "," << critYvalues[1] << "," << critTvalues[1] << endl;
