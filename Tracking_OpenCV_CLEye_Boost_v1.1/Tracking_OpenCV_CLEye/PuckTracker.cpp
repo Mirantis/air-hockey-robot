@@ -226,7 +226,7 @@ int PuckTracker::PredictPuckTrajectory(Mat *imgTrajectory, bool displayEnabled, 
 				float critX = critXvalues[critXindex];
 				float tOnThisPath = (critX - x) / vx;
 				float v = sqrt(pow(vx,2) + pow(vy,2));
-				critTvalues[critXindex] = t + tOnThisPath - abs(rPuck/v);
+				critTvalues[critXindex] = t + tOnThisPath - abs(rPuck/v) - 0.05;
 				critYvalues[critXindex] = y + vy * tOnThisPath;
 				critVyvalues[critXindex] = vy;
 			

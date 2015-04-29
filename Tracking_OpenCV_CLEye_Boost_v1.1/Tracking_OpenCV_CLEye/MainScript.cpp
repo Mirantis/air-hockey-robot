@@ -6,6 +6,7 @@
 #include "boost/thread/thread.hpp"
 #include "boost/filesystem.hpp"
 #include <iostream>
+#include <iomanip>
 #include <fstream>
 #include <time.h>
 #include "PuckTracker.h";
@@ -265,7 +266,7 @@ int _tmain(int argc, _TCHAR* argv[])
 	// Initialize puckTracker class -- maintains puck state variables
 	float rPuck = 1.60, rPaddle = 1.99;	//paddle radius, inches
 	PuckTracker puckTracker(rPuck, pbounds);
-	PuckTracker robotTracker(rPuck, rbounds);
+	//PuckTracker robotTracker(rPuck, rbounds);
 
 	int colorCycler = 0;
 	
@@ -309,7 +310,7 @@ int _tmain(int argc, _TCHAR* argv[])
 		tick++;
 		debugInfo << "**************" << endl;
 		debugInfo << "Frame " << tick << endl;
-		debugInfo << "Time: " <<  (double)getTickCount()/getTickFrequency() << endl;
+		debugInfo << "Time: " << setprecision(9) <<  (double)getTickCount()/getTickFrequency() << endl;
 
 		// Copy image from camera thread locally
 		Mat imgOriginal;
@@ -322,9 +323,11 @@ int _tmain(int argc, _TCHAR* argv[])
 		// check com port for updates
 		asInterface.readComPort(state);
 
+		//debugInfo << "Before status: " << setprecision(9) <<  (double)getTickCount()/getTickFrequency() << endl;
 		//extract puck position from image, maintain state variables
 		int trackStatus = puckTracker.UpdatePuckState(imgOriginal);
-		int robotStatus = robotTracker.UpdatePuckState(imgOriginal);
+		//int robotStatus = robotTracker.UpdatePuckState(imgOriginal);
+		//debugInfo << "After status: " << setprecision(9) <<  (double)getTickCount()/getTickFrequency() << endl;
 		bool positionUpdated = (trackStatus & 1) == 1, velocityUpdated = (trackStatus & 2) == 2;
 		if(!velocityUpdated) { vPx = 100; vPy = 0; }
 		//if(!(trackStatus & 1 == 1)) { continue; }	//go to next iteration if position wasn't updated
@@ -352,6 +355,8 @@ int _tmain(int argc, _TCHAR* argv[])
 		debugInfo << "Position: " << xPT << "," << yPT << "\t" << vPx << "," << vPy << endl;
 		debugInfo << "Counters: " << vPxHighCounter << "," << vPxNegCounter << "," << vPxFloatingCounter << endl;
 		debugInfo << "State: " << state << endl;
+
+		//debugInfo << "Before state: " << setprecision(9) <<  (double)getTickCount()/getTickFrequency() << endl;
 
 		#pragma region "State Machine"
 		int next_state = state;
@@ -407,7 +412,6 @@ int _tmain(int argc, _TCHAR* argv[])
 						else { filtPointsReq = 4; }
 						filtPointsReqSet = true;
 					}
-
 					// state actions -- predict puck trajectory, decide on attack/defense when conditions met
 					puckTracker.PredictPuckTrajectory(&imgTrajectory, displayEnabled, numberOfCritXvalues, critXvalues,
 						critYvalues, critTvalues, critVyvalues);
@@ -551,6 +555,11 @@ int _tmain(int argc, _TCHAR* argv[])
 		state = next_state;
 		#pragma endregion
 
+		//debugInfo << "After state: " << setprecision(9) <<  (double)getTickCount()/getTickFrequency() << endl;
+
+
+		//debugInfo << "Before debug: " << setprecision(9) <<  (double)getTickCount()/getTickFrequency() << endl;
+
 		//cout << state << "\t" << xPT << "," << yPT << "\t" << xPC << "," << yPC << endl;
 		if(loggingEnabled) { myfile << xPT << "," << yPT << "\t" << vPx << "\t" << globalArea << "," << globalRoundness << endl; }
 
@@ -591,6 +600,7 @@ int _tmain(int argc, _TCHAR* argv[])
 				imwrite(string(fileName), imgOriginal );
 			}
 
+			/*
 			imshow(OUTPUT_WINDOW, imgOriginal); //show the original image
 			//imshow("Contours",imgThresholded);
 		
@@ -603,7 +613,11 @@ int _tmain(int argc, _TCHAR* argv[])
 			else if(keyPress == 32) { //empty out lines
 				imgLines = Mat::zeros( imgLines.size(), CV_8UC4 );
 			}
+			*/
 		}
+
+		//debugInfo << "After debug: " << setprecision(9) <<  (double)getTickCount()/getTickFrequency() << endl;
+
 
 		frameTimestamp = getTickCount();
 		loopTime = ((float)(frameTimestamp - oldFrameTimestamp))/getTickFrequency();

@@ -15,7 +15,7 @@ public:
 	bool writeComPort(unsigned char *message, int length);
 	bool sendDefendCommand(float xT1, float yT1, float tT1);
 	bool sendAttackCommand(float xP2, float yP2, float tT2);
-	bool sendRecenterCommand(float xRobotT, float yRobotT, bool centerHomeY);
+	bool sendRecenterCommand(bool centerHomeY);
 	bool sendDefendAttackCommand(float xD, float yD, float tD, float xA, float yA, float tA, float aA);
 	bool defenseCmdAcked, attackCmdAcked, defAttCmdAcked, recenterCmdAcked;
 private:

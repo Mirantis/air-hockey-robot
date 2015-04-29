@@ -88,10 +88,10 @@ float yProfile[6] = { 0, 0, 0.11, 0.71, 2.03, 3.46 };
 
 bool homingEnabled = true;  //toggle to enable/disable homing
 bool dontMove = false;      //toggle to enable/disable motors during testing
-bool debugMode = true;
+bool debugMode = false;
 
 void setup() {
-  Serial.begin(19200); Serial3.begin(57600);
+  Serial.begin(115200); Serial3.begin(57600);
   pinMode(xDriveEnablePin1,OUTPUT); pinMode(xDriveEnablePin2,OUTPUT);
   digitalWrite(xDriveEnablePin1,HIGH); digitalWrite(xDriveEnablePin2,HIGH);
   pinMode(yDriveEnablePin,OUTPUT); digitalWrite(yDriveEnablePin,HIGH);
@@ -184,8 +184,10 @@ void loop() {
         Serial3.println(ySpdCommand);
       }
       */
-      Serial3.print(xTicks); Serial3.print(","); Serial3.print(yTicks); Serial3.print("\t");
-      Serial3.print(xR - paddleXoffset); Serial3.print(","); Serial3.println(yR - paddleYoffset);
+      if(debugMode) {
+        Serial3.print(xTicks); Serial3.print(","); Serial3.print(yTicks); Serial3.print("\t");
+        Serial3.print(xR - paddleXoffset); Serial3.print(","); Serial3.println(yR - paddleYoffset);
+      }
       next_state = recenterRequest || goalScored ? 3 : 0;
       next_state = defend ? 1 : next_state;
       next_state = attackAngled ? 4 : next_state;
@@ -389,7 +391,7 @@ void loop() {
       if(prev_state != 4) {
         Serial3.println("Entered State 4");
         xRampDown = false; yRampDown = false;
-        tT2 -= 5*(float)dt/1000; //speed up arrival time
+        //tT2 -= 5*(float)dt/1000; //speed up arrival time
       }
       if(tT2 <= 0) {
         xRampDown = true; yRampDown = true;
@@ -406,16 +408,19 @@ void loop() {
       if(moveX) {
         // change y ramp rate to arrive at target location at correct time
         float vy = yFreq/(encoderPPR*microstep)*2*PI*rp;
-        float ay = 2*(yT2 - yR - vy*tT2)/(tT2*tT2);
+        int dir = yT2 > yR ? 1 : -1;
+        float ay = 2*(yT2  + dir*1.6 - yR - vy*tT2)/(tT2*tT2);
         yRampRate = getAbsolute(ay*60/(2*PI*rp));
         yRampRate = yRampRate > yRampInit ? yRampInit : yRampRate;
         yRampRate = yRampRate < 1 ? 1 : yRampRate;
         yServo.SetRampRate(yRampRate);
-        int dir = ay > 0 ? 1 : -1;
+        dir = ay > 0 ? 1 : -1;
         float yTarget = ay > 0 ? yBoundHigh : yBoundLow;  //set new yTarget to move through puck point
         ySpd = dir*ySpd_max;
         
-        bool olTargetReached = moveWithOpenLoopRampDown(xT2, yT2, 0.01, loopTimeSecs);
+        bool olTargetReached = moveWithOpenLoopRampDown(xT2, yTarget, 0.01, loopTimeSecs);
+        Serial3.print(tT2); Serial3.print("\t");Serial3.print(xR - paddleXoffset);Serial3.print(",");Serial3.print(yR - paddleYoffset);
+        Serial3.print("\t"); Serial3.print(vy); Serial3.print(",");Serial3.println(ay);
       }
       
       if(debugMode) {
@@ -660,7 +665,7 @@ void respondToSerialCmd()
  
   if(cmd == recenterCmd) {
     unsigned long recStart = micros();
-    //Serial3.println("Recenter cmd received.");
+    Serial3.print("Recenter cmd received: "); Serial3.println(recStart);
     //if(state != 0 && state != 1) { FlushSerialInput(); return; }
     unsigned char data = Serial.read();
     // check suffix bytes
@@ -727,7 +732,7 @@ void respondToSerialCmd()
   else if(cmd == startDefenseCmd)
   {
     unsigned long defStart = micros();
-    //Serial3.println("Defense cmd received.");
+    Serial3.print("Defense cmd received: "); Serial3.println(defStart);
     
     //ignore if attacking
     if(attackStraight || attackAngled) { SendAck(startDefenseCmd); FlushSerialInput(); return; }
@@ -773,7 +778,8 @@ void respondToSerialCmd()
   else if(cmd == startAttackCmd) {
     unsigned long attStart = micros();
     //receive desired attack point, time of arrival, possibly angle of attack
-    //Serial3.println("Attack cmd received.");
+    Serial3.print("Arrack cmd received: "); Serial3.println(attStart);
+    
     unsigned char dataArray[12];
     unsigned int checksum = 0;
     for(int i=0;i<12;i++) {
