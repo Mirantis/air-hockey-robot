@@ -1,0 +1,7 @@
+C:\Users\bclay\Documents\CanvasBot\Mach3Demo\X360Gamepad\bin\Debug\X360Gamepad.dll
+C:\Users\bclay\Documents\CanvasBot\Mach3Demo\X360Gamepad\bin\Debug\X360Gamepad.pdb
+C:\Users\bclay\Documents\CanvasBot\Mach3Demo\X360Gamepad\bin\Debug\SlimDX.dll
+C:\Users\bclay\Documents\CanvasBot\Mach3Demo\X360Gamepad\bin\Debug\SlimDX.pdb
+C:\Users\bclay\Documents\CanvasBot\Mach3Demo\X360Gamepad\bin\Debug\SlimDX.xml
+C:\Users\bclay\Documents\CanvasBot\Mach3Demo\X360Gamepad\obj\Debug\X360Gamepad.dll
+C:\Users\bclay\Documents\CanvasBot\Mach3Demo\X360Gamepad\obj\Debug\X360Gamepad.pdb

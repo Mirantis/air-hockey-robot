@@ -13,11 +13,10 @@ unsigned int recenterCmd = 'rc';   //recenter (move to 4,18)
 
 // vars
 float encoderPPR = 195;
-//float encoderPPR = 100;
 int leftDir = 1;
 //float rampRate = 20000;
 //float xRampRate = 2250, yRampRate = 8000;   //motor acceleration in rpm/s2
-float xRampRate = 2250, yRampRate = 7000;   //motor acceleration in rpm/s2
+float xRampRate = 2250, yRampRate = 6000;   //motor acceleration in rpm/s2
 float yRampInit = 7000;  //used to reset ramp rate after changing it
 float xRampLow = 2250, xRampHigh = 2250;
 //float xRampRate = 2000, yRampRate = 5000;   //motor acceleration in rpm/s2
@@ -89,10 +88,10 @@ float yProfile[6] = { 0, 0, 0.11, 0.71, 2.03, 3.46 };
 
 bool homingEnabled = true;  //toggle to enable/disable homing
 bool dontMove = false;      //toggle to enable/disable motors during testing
-bool debugMode = !true;
+bool debugMode = true;
 
 void setup() {
-  Serial.begin(115200); Serial3.begin(57600);
+  Serial.begin(19200); Serial3.begin(57600);
   pinMode(xDriveEnablePin1,OUTPUT); pinMode(xDriveEnablePin2,OUTPUT);
   digitalWrite(xDriveEnablePin1,HIGH); digitalWrite(xDriveEnablePin2,HIGH);
   pinMode(yDriveEnablePin,OUTPUT); digitalWrite(yDriveEnablePin,HIGH);
@@ -109,9 +108,9 @@ void setup() {
   ySpeedStep = yRampRate*(float)dt/1000; ySpeedStepIns2 = ySpeedStep*2*PI*rp/60;
   
   xMinTicks = 6*microstep; yMinTicks = 20*microstep;
-  xMaxTicks = 690*microstep; yMaxTicks = 740*microstep;
+  xMaxTicks = 690*microstep; yMaxTicks = 753*microstep;
   
-  xBoundLow  = 0.5; yBoundLow = 1.5;
+  xBoundLow  = 0.5; yBoundLow = 1.25;
   xBoundHigh = (float)xMaxTicks/(encoderPPR*microstep)*rp*2*PI;
   yBoundHigh = (float)yMaxTicks/(encoderPPR*microstep)*rp*2*PI;
   
@@ -143,25 +142,13 @@ void loop() {
   unsigned long loopTime = loopStartTime - prevTime;
   prevTime = micros();
   float loopTimeSecs = (float)loopTime/1000000;
-  //Serial3.println(loopTimeSecs);
-  //Serial3.println(yTickCorrection);
-  //Serial3.println(digitalRead(x2homePin));
   if(Serial.available() > 2) { respondToSerialCmd(); }
   
   // check if a goal was scored
   goalScored = goalScored ? goalScored : analogRead(8)> 900;
-  //Serial3.print("Goal: "); Serial3.println(goalScored);
-  // use piecewise function to adjust xRampRate
-  /*
-  if(getAbsolute(xServo.GetSpeedCommand()) < 250) { xRampRate = xRampLow; }
-  else { xRampRate = xRampHigh; }
-  xRampRateTicksS2 = xRampRate*microstep*encoderPPR/60;
-  xServo.SetRampRate(xRampRate);
-  */
   
   // ramp rate in ticks/s2
   xFreq = xServo.GetPulseFrequency(), yFreq = yServo.GetPulseFrequency();
-  //float xRampDownTicks = 0.5*xFreq*xFreq/xRampRateTicksS2 + getAbsolute(xFreq)*(float)dt/1000;
   //xRampDownTicks = 0.5*xFreq*xFreq/xRampHighTicksS2 + 2*getAbsolute(xFreq)*loopTimeSecs;
   //yRampDownTicks = 0.5*yFreq*yFreq/yRampRateTicksS2 + 2*getAbsolute(yFreq)*loopTimeSecs;
   xRampDownTicks = 0.5*xFreq*xFreq/xRampHighTicksS2;
@@ -197,12 +184,12 @@ void loop() {
         Serial3.println(ySpdCommand);
       }
       */
+      Serial3.print(xTicks); Serial3.print(","); Serial3.print(yTicks); Serial3.print("\t");
+      Serial3.print(xR - paddleXoffset); Serial3.print(","); Serial3.println(yR - paddleYoffset);
       next_state = recenterRequest || goalScored ? 3 : 0;
       next_state = defend ? 1 : next_state;
       next_state = attackAngled ? 4 : next_state;
       next_state = attackStraight ? 2 : next_state;
-      //next_state = attack ? 2 : next_state;
-      //next_state = attack ? 1 : next_state;  //for testing, change back when done
       break;
     }
     case 1: {  //defense or straight attack pt 1 -- use xT1, yT1, tT1
@@ -220,9 +207,9 @@ void loop() {
       //if(tT2 < 0) { attack = false; defend = true; }  //switch flags if out of attack time
       
       // state transitions
-      // return to idle state if defending
-      next_state = target1reached && defend ? 0 : 1;
-      //next_state = getAbsolute(xR-xT1) && getAbsolute(yR-yT1) < 0.4 ? 0 : 1;
+      // return to idle state
+      next_state = target1reached ? 0 : 1;
+      //next_state = getAbsolute(xR-xT1) && getAbsolute(yR-yT1) < 0.4;
       // stay in this state to continue updating position until it's time to attack
       //next_state = target1reached && attack && tT2 <= xTau2 + 0.80 ? 2 : next_state;
       next_state = attackAngled ? 2 : next_state;
@@ -413,16 +400,12 @@ void loop() {
       bool moveX = false;
       moveX = (getAbsolute(tT2 - xTau2) < (float)dt/(2*1000) || tT2 <= xTau2) && xTau2 >= (float)dt/2000;
       //moveY = (getAbsolute(tT2 - yTau2) < (float)dt/(2*1000) || tT2 <= yTau2) && yTau2 >= (float)dt/2000;
-    
-      //move with no pid ramp down control -- stop point is not important
-      float xTargetTicks = xT2*microstep*encoderPPR/(rp*2*PI);
-      float yTargetTicks = yT2*microstep*encoderPPR/(rp*2*PI);
       
       //move x if time is right and not in ramp down
       float xLim, yLim;
       if(moveX) {
         // change y ramp rate to arrive at target location at correct time
-        float vy = ySpdCommand*2*PI*rp/60;
+        float vy = yFreq/(encoderPPR*microstep)*2*PI*rp;
         float ay = 2*(yT2 - yR - vy*tT2)/(tT2*tT2);
         yRampRate = getAbsolute(ay*60/(2*PI*rp));
         yRampRate = yRampRate > yRampInit ? yRampInit : yRampRate;
@@ -822,24 +805,22 @@ void respondToSerialCmd()
     
     //Serial3.print(xP2); Serial3.print(","); Serial3.println(yP2);
     
-    float tToX1 = 0.31;    //assumed time taken to reach xT1
-    // stay away from limits
-    //if(check_tT2 < tToX1 || check_yP2 < yBoundLow || check_yP2 > yBoundHigh) { FlushSerialInput(); return; }
+    // select shot based on xP2 received
+    float margin = 8;  //minimum required distance from y boundaries
+    xTau2 = getAbsolute(xP2 - 8.75) < getAbsolute(xP2 - 15) ? xTau[2] : xTau[4];
     
-    // assign check values to actual vars
-    xTau2 = xTau[4];
     tT2 = check_tT2;
     xRampDown = false; yRampDown = false;
     
     // set xT2 to max, yT2 to puck y-value
-    xT2 = 31; yT2 = yP2;
+    xT2 = xBoundHigh; yT2 = yP2;
     
-    float margin = 6;
-    if(yT2 > yBoundLow + margin && yT2 < yBoundHigh - margin) { attackAngled = true; attackStraight = false; }
+    if(yT2 > yBoundLow + margin && yT2 < yBoundHigh - margin) {
+      attackAngled = true; attackStraight = false;
+    }
     else if(!attackAngled) { attackStraight = true; attackAngled = false; }
-    
-    //attack = true; 
-    defend = false;    
+    defend = false; 
+    //attack = true;
     //Serial3.print("Shot selection: "); Serial3.print(xProfileSpd[4]); Serial3.print(",");
     //Serial3.print(yP2);
     
