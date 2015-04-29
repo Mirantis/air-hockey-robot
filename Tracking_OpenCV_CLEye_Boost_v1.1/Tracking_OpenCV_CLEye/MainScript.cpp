@@ -509,7 +509,7 @@ int _tmain(int argc, _TCHAR* argv[])
 
 				if(!asInterface.recenterCmdAcked) {
 					cout << "Retransmitting..." << endl;
-					asInterface.sendRecenterCommand(centerHomeY);
+					asInterface.sendRecenterCommand(centerHomeY, robotTracker.xPT, robotTracker.yPT);
 				}
 
 				next_state = asInterface.recenterCmdAcked ? 0 : 3;

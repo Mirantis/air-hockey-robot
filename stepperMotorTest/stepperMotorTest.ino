@@ -389,7 +389,7 @@ void loop() {
       if(prev_state != 4) {
         Serial3.println("Entered State 4");
         xRampDown = false; yRampDown = false;
-        //tT2 -= (float)dt/1000; //speed up arrival time
+        tT2 -= 5*(float)dt/1000; //speed up arrival time
       }
       if(tT2 <= 0) {
         xRampDown = true; yRampDown = true;
