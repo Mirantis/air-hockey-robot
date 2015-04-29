@@ -4,6 +4,7 @@
 #include "opencv2/highgui/highgui.hpp"
 #include "opencv2/imgproc/imgproc.hpp"
 #include "boost/thread/thread.hpp"
+#include "boost/filesystem.hpp"
 #include <iostream>
 #include <fstream>
 #include <time.h>
@@ -22,8 +23,8 @@ PVOID latency = NULL;
 #define CAM_PIX_HEIGHT 240
 #define numberOfCritXvalues 5
 #define PI 3.14159265358979323846
-#define YDEF_HIGH 29
-#define YDEF_LOW 10
+#define YDEF_HIGH 33
+#define YDEF_LOW 7
 #define TDEF_MIN 0.02
 #define YATT_HIGH 33
 #define YATT_LOW 3.45
@@ -39,9 +40,10 @@ boost::mutex mtx;
 
 // OpenCV and Camera Capture Vars //
 Mat imgCapture, imgLines;
-bool displayEnabled = false;		//enable to show camera output -- slows down compute cycle time significantly
+bool displayEnabled = true;		//enable to show camera output -- slows down compute cycle time significantly
 bool loggingEnabled = false;	//enable to log data to asdf.txt
 bool cameraUpdated = false;
+bool writeVideo = true;
 
 // testing
 double globalArea = 0, globalRoundness = 0;
@@ -246,6 +248,8 @@ int _tmain(int argc, _TCHAR* argv[])
 	if(loggingEnabled) { myfile.open("asdf.txt"); }
 	Sleep(2000);	//wait for camera to initialize -- this could end badly
 
+	ofstream debugInfo("log.txt", std::ofstream::out);
+
 	// puck HSV bounds
 	PuckTracker::HSVBounds pbounds;
 	pbounds.minH=21; pbounds.maxH=72;
@@ -271,7 +275,8 @@ int _tmain(int argc, _TCHAR* argv[])
 	float &vPx = puckTracker.vPx, &vPy = puckTracker.vPy;
 
 	// x,y,t are target defense position (defense) or target puck position (attack). angleTarget is angle of attack
-	float xDef = 0, yDef = 0, tDef = 0, xAtt = 0, yAtt = 0, tAtt = 0, angleAtt = 0;
+	float xDef = 0, yDef = 0, tDef = 0, xAtt = 0, yAtt = 0, tAtt = 0;
+	deque<float> yDefArr, tDefArr, yAttArr, tAttArr;
 	float critXvalues[] = { 23, 15, 12, 10, 3};		//x locations at which trajectory is evaluated for AI decision-making
 	float critYvalues[numberOfCritXvalues], critTvalues[numberOfCritXvalues], critVyvalues[numberOfCritXvalues];
 	float tAttThreshold = 0.33, tDefThreshold = 0.02;	//minimum required value of tAtt to send attack command
@@ -285,7 +290,7 @@ int _tmain(int argc, _TCHAR* argv[])
 	// towards: puck moving towards robot, away: puck moving away from robot, decision: latest x-value at which attack/defense must be picked
 	float xThreshold_towards = 50, xThreshold_away = 30, xThreshold_decision = 35;
 	float xPTfilt = 0, yPTfilt = 0, vPxfilt = 0, vPyfilt = 0;
-	float xFloatingVMin = -40, xFloatingVMax = 20, xFloatingLimit = 25;
+	float xFloatingVMin = -20, xFloatingVMax = 20, xFloatingLimit = 25;
 	int noPuckCounter = 0;
 	boolean forceRecenter = false;
 
@@ -299,6 +304,13 @@ int _tmain(int argc, _TCHAR* argv[])
 	};
 	*/
 	while(true) {
+
+		static int tick = 0;
+		tick++;
+		debugInfo << "**************" << endl;
+		debugInfo << "Frame " << tick << endl;
+		debugInfo << "Time: " <<  (double)getTickCount()/getTickFrequency() << endl;
+
 		// Copy image from camera thread locally
 		Mat imgOriginal;
 		mtx.lock();
@@ -332,11 +344,14 @@ int _tmain(int argc, _TCHAR* argv[])
 
 		vPxHighCounter = vPx > xFloatingVMax ? vPxHighCounter + 1 : 0;
 		vPxNegCounter = vPx < xFloatingVMin ? vPxNegCounter + 1 : 0;
-		vPxFloatingCounter = vPxHighCounter || vPxNegCounter ? 0 : vPxFloatingCounter +1; 
+		vPxFloatingCounter = vPxHighCounter || vPxNegCounter ? 0 : vPxFloatingCounter + 1; 
 
-		if (vPxHighCounter % 100 == 1 || vPxNegCounter %100 == 1 || vPxFloatingCounter % 100 == 1) {
-			cout << "C: " << xPT << "," << yPT << "\t" << vPx << "," << vPy << "\t" << vPxHighCounter << "," << vPxNegCounter << "," << vPxFloatingCounter << endl;
-		}
+		//if (vPxHighCounter % 100 == 1 || vPxNegCounter %100 == 1 || vPxFloatingCounter % 100 == 1) {
+		//	cout << "C: " << xPT << "," << yPT << "\t" << vPx << "," << vPy << "\t" << vPxHighCounter << "," << vPxNegCounter << "," << vPxFloatingCounter << endl;
+		//}
+		debugInfo << "Position: " << xPT << "," << yPT << "\t" << vPx << "," << vPy << endl;
+		debugInfo << "Counters: " << vPxHighCounter << "," << vPxNegCounter << "," << vPxFloatingCounter << endl;
+		debugInfo << "State: " << state << endl;
 
 		#pragma region "State Machine"
 		int next_state = state;
@@ -346,9 +361,12 @@ int _tmain(int argc, _TCHAR* argv[])
 				if(prev_state != 0) { cout << "Entered state 0" << endl; }
 
 				if (noPuckCounter == 0 && vPxFloatingCounter >= 5 && xPT <= xFloatingLimit) {
-					cout << "Puching the puck: " << xPT << "," << yPT << endl;
+					float nx = xPT + vPx / 10.0;
+					float ny = yPT + vPy / 10.0;
+					cout << "Puching the puck: " << nx << "," << ny << endl;
+					debugInfo << "Puching the puck: " << nx << "," << ny << endl;
 
-					asInterface.sendDefendCommand(xPT + vPx / 10.0, yPT + vPy / 10.0, 0.001);
+					asInterface.sendDefendCommand(nx, ny, 0.001);
 					next_state = 0;
 					recenterLock = false;
 					break;
@@ -377,6 +395,7 @@ int _tmain(int argc, _TCHAR* argv[])
 					cout << puckTracker.prev_xPT << "," << puckTracker.prev_yPT << endl;
 					xPTfilt = 0; yPTfilt = 0; vPxfilt = 0; vPyfilt = 0; filtPoints = 0;
 					xDef = 0; yDef = 0; tDef = 0; xAtt = 0; yAtt = 0; tAtt = 0;
+					yDefArr.clear(); tDefArr.clear(); yAttArr.clear(); tAttArr.clear();
 					recenterLock = false; timeInState1 = 0;
 				}
 				bool decide = false, noMoves = false;
@@ -395,9 +414,14 @@ int _tmain(int argc, _TCHAR* argv[])
 
 					// clear filter and only require 2 points after a ricochet
 					if(puckTracker.yRicochetOccurred) {
+						debugInfo << "Ricochet Occurred" << endl;
 						xDef = 0; yDef = 0; tDef = 0; xAtt = 0; yAtt = 0; tAtt = 0;
+						yDefArr.clear(); tDefArr.clear(); yAttArr.clear(); tAttArr.clear();
 						filtPointsReq = 2; filtPoints = 0;
 						puckTracker.yRicochetOccurred = false;	//clear flag
+						timeInState1 += loopTime;
+						next_state = 1;
+						break;
 					}
 
 					filtPoints++;
@@ -408,6 +432,7 @@ int _tmain(int argc, _TCHAR* argv[])
 
 					// check time at critXvalues[1] -- attack point
 					xAtt = critXvalues[1]; yAtt += critYvalues[1]; tAtt += critTvalues[1];
+					yAttArr.push_back(critYvalues[1]); tAttArr.push_back(critTvalues[1]);
 				
 					// check y, t values before adding to filter
 					//yAtt += checkBounds(critYvalues[1], yAtt, YATT_HIGH, YATT_LOW, filtPoints);
@@ -416,6 +441,15 @@ int _tmain(int argc, _TCHAR* argv[])
 					// determine command point for defense
 					int idx = numberOfCritXvalues - 1;
 					xDef = critXvalues[idx]; yDef += critYvalues[idx]; tDef += critTvalues[idx];
+					yDefArr.push_back(critYvalues[idx]); tDefArr.push_back(critTvalues[idx]);
+
+					if (filtPoints > 5) {
+						tAtt -= tAttArr.front(); tAttArr.pop_front();
+						yAtt -= yAttArr.front(); yAttArr.pop_front();
+						tDef -= tDefArr.front(); tDefArr.pop_front();
+						yDef -= yDefArr.front(); yDefArr.pop_front();
+						filtPoints--;
+					}
 				
 					//yDef += checkBounds(critYvalues[idx], yDef, yBoundLow, yBoundHigh, filtPoints);
 					//tDef += checkBounds(critTvalues[idx], tDef, 0, 100, filtPoints);
@@ -431,8 +465,12 @@ int _tmain(int argc, _TCHAR* argv[])
 					noMoves = false;
 					if(decide) {
 						//send once here for fastest response, continuously send after state 2 transition
-						yDef /= filtPoints; tDef /= filtPoints;
-						yAtt /= filtPoints; tAtt /= filtPoints;
+						float xD = xDef;
+						float yD = yDef / filtPoints; 
+						float tD = tDef / filtPoints;
+						float xA = xAtt;
+						float yA = yAtt / filtPoints; 
+						float tA = tAtt / filtPoints;
 					
 						//if puck is coming at an angle, offset defense point by paddle radius
 						//if(critVyvalues[idx]/vPx < -0.33) { yDef += rPaddle; }
@@ -441,18 +479,23 @@ int _tmain(int argc, _TCHAR* argv[])
 						//else if(critVyvalues[idx]/vPx > 0.33) { yDef += rPaddle; }
 
 						// make sure commands are within bounds
-						defInRange = yDef >= YDEF_LOW && yDef <= YDEF_HIGH && tDef > TDEF_MIN;
-						attInRange = yAtt > YATT_LOW && yAtt < YATT_HIGH && tAtt > TATT_MIN;
+						bool defInRange = yD >= YDEF_LOW && yD <= YDEF_HIGH && tD > TDEF_MIN;
+						bool attInRange = yA > YATT_LOW && yA < YATT_HIGH && tA > TATT_MIN;
 
 						if(attInRange) {
-							cout << "A: " << xAtt << "," << yAtt << "," << tAtt << endl;
-							asInterface.sendAttackCommand(xAtt,yAtt,tAtt); 
+							cout << "A: " << xA << "," << yA << "," << tA << endl;
+							debugInfo << "Attacking: " << xA << "," << yA << "," << tA << endl;
+							asInterface.sendAttackCommand(xA,yA,tA); 
 						}
 						else if(defInRange) { 
-							cout << "D: " << xDef << "," << yDef << "," << tDef << endl;
-							asInterface.sendDefendCommand(xDef,yDef,tDef); 
+							cout << "D: " << xD << "," << yD << "," << tD << endl;
+							debugInfo << "Defensing: " << xD << "," << yD << "," << tD << endl;
+							asInterface.sendDefendCommand(xD,yD,tD); 
 						}
-						else { noMoves = true; }	//both out of range, give up
+						else { 
+							noMoves = true; 
+							debugInfo << "Give up!"<< endl;
+						}	//both out of range, give up
 						prevCommandTime = getTickCount();
 					}
 				}
@@ -461,7 +504,7 @@ int _tmain(int argc, _TCHAR* argv[])
 
 				// state transitions
 				next_state = timeInState1 > state1Timeout ? 0 : 1;	//timeout after 1 second to avoid getting stuck waiting for more points
-				next_state = decide ? 2 : next_state;	//retransmit attack or defense command
+				//next_state = decide ? 2 : next_state;	//retransmit attack or defense command
 				next_state = decide && vPxfilt > 1 || noMoves ? 0 : next_state;
 				//next_state = xPT >= xThreshold_away && vPx > 1 ? 3 : next_state;
 				next_state = vPxHighCounter > 0 && !recenterLock ? 3 : next_state;
@@ -469,48 +512,7 @@ int _tmain(int argc, _TCHAR* argv[])
 				if(next_state != 1) { filtPointsReqSet = false; }
 				break;
 			}
-			case 2: {	//retransmitting defense/attack routine until acked
-				// entry
-				if(prev_state != 2) {
-					cout << "Entered state 2" << endl;
-					cout << xPT << "," << yPT << "," << vPx << "," << vPy << "\t" << xDef << "," << yDef << "," << tDef;
-					cout << "\t" << xAtt << "," << yAtt << "," << tAtt << "," << filtPoints << endl;
-					//if(tTarget1 <= 0) { next_state = 0; return; }
-					retransmitCounter = 3;
-				}
-
-				// subtract elapsed time from target time
-				long currentTime = getTickCount();
-				float timeDiff = ((float)(currentTime - prevCommandTime))/getTickFrequency();	//seconds
-				timeDiff = timeDiff < 0 ? 0.015 : timeDiff;	//assume 15 ms interval if overflow occurs
-				tDef -= timeDiff; tDef = tDef < 0 ? 0 : tDef;
-				tAtt -= timeDiff; tAtt = tAtt < 0 ? 0 : tAtt;
-
-				// state actions -- send arduino packet with defend + attack points
-				/*
-				if(tDef > 0.00001 && !defAttCmdAcked) {
-					prevCommandTime = getTickCount();
-					sendDefendAttackCommand(xDef,yDef,tDef,xAtt,yAtt,tAtt,angleAtt);
-				}
-				*/
-				
-				//retransmit until command is acknowledged
-				if(attInRange && tAtt >= tAttThreshold && !asInterface.attackCmdAcked && retransmitCounter > 1) {	//send attack command if there's sufficient time
-					asInterface.sendAttackCommand(xAtt,yAtt,tAtt);
-					asInterface.attackCmdAcked = false;
-				}
-				else if(defInRange && tDef >= tDefThreshold && !asInterface.defenseCmdAcked && retransmitCounter > 1) {	//send defense command otherwise
-					asInterface.sendDefendCommand(xDef,yDef,tDef);
-					asInterface.defenseCmdAcked = false;
-				}
-				prevCommandTime = getTickCount();
-				retransmitCounter = retransmitCounter > 1 ? 0 : retransmitCounter++;	//avoid swamping arduino
-
-				// transitions
-				next_state = tDef < tDefThreshold || asInterface.attackCmdAcked || asInterface.defenseCmdAcked ? 0 : 2;
-				//next_state = xPT >= xThreshold_away && vPx > 1 ? 3 : next_state;
-				next_state = vPxHighCounter > 0 && !recenterLock ? 3 : next_state;
-				if(next_state != 2) { asInterface.defAttCmdAcked = false; asInterface.attackCmdAcked = false; asInterface.defenseCmdAcked = false; }
+			case 2: {	
 				break;
 			}
 			case 3: { //puck moves robot -> player: recenter if time is available
@@ -525,7 +527,8 @@ int _tmain(int argc, _TCHAR* argv[])
 
 				if(!asInterface.recenterCmdAcked) {
 					cout << "Retransmitting..." << endl;
-					asInterface.sendRecenterCommand(centerHomeY, robotTracker.xPT, robotTracker.yPT);
+					debugInfo << "Recentering" << endl;
+					asInterface.sendRecenterCommand(centerHomeY);
 				}
 
 				next_state = asInterface.recenterCmdAcked ? 0 : 3;
@@ -570,12 +573,24 @@ int _tmain(int argc, _TCHAR* argv[])
 				*/
 			mtx.try_lock(); 
 			line(imgLines, Point(xPC, yPC), Point(puckTracker.prev_xPC, puckTracker.prev_yPC), Scalar(0,0,255), 2); 
-			line(imgLines, Point(robotTracker.xPC, robotTracker.yPC), Point(robotTracker.prev_xPC, robotTracker.prev_yPC), Scalar(0,255,0), 2); 
+			//line(imgLines, Point(robotTracker.xPC, robotTracker.yPC), Point(robotTracker.prev_xPC, robotTracker.prev_yPC), Scalar(0,255,0), 2); 
 			mtx.unlock();
 				//cout << "lines added" << endl;
 			//}
 
 			imgOriginal = imgOriginal + imgLines + imgTrajectory;
+
+			if (writeVideo) {
+				if (tick == 1) {
+					boost::filesystem::path dir("recording");
+					boost::filesystem::remove_all(dir);
+					boost::filesystem::create_directory(dir);
+				}
+				char fileName[255];
+				sprintf(fileName, "recording/frame_%.4d.jpg", tick);
+				imwrite(string(fileName), imgOriginal );
+			}
+
 			imshow(OUTPUT_WINDOW, imgOriginal); //show the original image
 			//imshow("Contours",imgThresholded);
 		
@@ -596,6 +611,7 @@ int _tmain(int argc, _TCHAR* argv[])
 
 		oldFrameTimestamp = getTickCount();
 	}
+
 	//myfile.close();
 	cam -> Stop();
 	cvDestroyWindow(OUTPUT_WINDOW);

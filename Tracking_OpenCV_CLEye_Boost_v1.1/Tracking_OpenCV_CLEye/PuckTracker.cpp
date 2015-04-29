@@ -134,15 +134,10 @@ int PuckTracker::UpdatePuckState(Mat imgOriginal)
 
 void PuckTracker::UpdateVelocityFilter(double dt)
 {
-	//if(prev_vPx*vPx > 1) { vPx = (prev_vPx + 2*vPx)/3; }	//check if velocity changed direction
-	//else { xRicochetOccurred = true; }
-	//if(prev_vPy*vPy > 1) { vPy = (prev_vPy + 2*vPy)/3; }
-	//else { yRicochetOccurred = true; }
-
-	if(prev_vPx*vPx < -1) { xRicochetOccurred = true; }
-	else { xRicochetOccurred = false; }
-	if(prev_vPy*vPy < -1) { yRicochetOccurred = true; }
-	else { yRicochetOccurred = false; }
+	if(prev_vPx*vPx > 1) { /*vPx = (prev_vPx + 2*vPx)/3; */ xRicochetOccurred = false; }	//check if velocity changed direction
+	else { xRicochetOccurred = true; }
+	if(prev_vPy*vPy > 1) { /*vPy = (prev_vPy + 2*vPy)/3; */ yRicochetOccurred = false;}
+	else { yRicochetOccurred = true; }
 }
 
 // return int is binary flag set: 1 - ricochet detected
