@@ -4,6 +4,7 @@
 #include "opencv2/highgui/highgui.hpp"
 #include "opencv2/imgproc/imgproc.hpp"
 #include "boost/thread/thread.hpp"
+#include "boost/filesystem.hpp"
 #include <iostream>
 #include <fstream>
 #include <time.h>
@@ -42,6 +43,7 @@ Mat imgCapture, imgLines;
 bool displayEnabled = false;		//enable to show camera output -- slows down compute cycle time significantly
 bool loggingEnabled = false;	//enable to log data to asdf.txt
 bool cameraUpdated = false;
+bool writeVideo =false;
 
 // testing
 double globalArea = 0, globalRoundness = 0;
@@ -578,6 +580,24 @@ int _tmain(int argc, _TCHAR* argv[])
 			//}
 
 			imgOriginal = imgOriginal + imgLines + imgTrajectory;
+
+			if (writeVideo) {
+				static int frameNumber = 0;
+				if (!frameNumber) {
+					boost::filesystem::path dir("recording");
+					boost::filesystem::remove_all(dir);
+					boost::filesystem::create_directory(dir);
+				}
+				frameNumber++;
+				char fileName[255];
+				sprintf(fileName, "recording/frame_%.4d.jpg", frameNumber);
+				imwrite(string(fileName), imgOriginal );
+				sprintf(fileName, "recording/frame_%.4d.txt", frameNumber);
+				ofstream debugInfo(fileName);
+				debugInfo << xPT << "," << yPT << "\t" << vPx << "," << vPy << "\t" << vPxHighCounter << "," << vPxNegCounter << "," << vPxFloatingCounter << endl;
+				debugInfo.close();
+			}
+
 			imshow(OUTPUT_WINDOW, imgOriginal); //show the original image
 			//imshow("Contours",imgThresholded);
 		
@@ -598,6 +618,7 @@ int _tmain(int argc, _TCHAR* argv[])
 
 		oldFrameTimestamp = getTickCount();
 	}
+
 	//myfile.close();
 	cam -> Stop();
 	cvDestroyWindow(OUTPUT_WINDOW);
