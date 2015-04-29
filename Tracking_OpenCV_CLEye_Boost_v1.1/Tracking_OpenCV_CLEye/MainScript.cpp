@@ -223,7 +223,7 @@ int _tmain(int argc, _TCHAR* argv[])
 	}
 	
 	// Open serial port
-	ArduinoSerialInterface asInterface = *new ArduinoSerialInterface(L"\\\\.\\COM41");
+	ArduinoSerialInterface asInterface = *new ArduinoSerialInterface(L"\\\\.\\COM4");
 	bool opened = asInterface.openComPort();
 	if(!opened) {
 		cout << "Failed to open serial port!" << endl;
@@ -279,14 +279,15 @@ int _tmain(int argc, _TCHAR* argv[])
 	bool filtPointsReqSet = false, ricochetDetected = false;
 	int filtPoints = 0, filtPointsReq = 4, origFiltPoints = 4;
 	long prevCommandTime = 0, prevState1Time = 0;
-	int vPxHighCounter = 0, vPxHigh2Counter = 0, vPxNegCounter = 0, retransmitCounter = 0;
+	int vPxHighCounter = 0, vPxNegCounter = 0, vPxFloatingCounter = 0, retransmitCounter = 0;
 	float loopTime = 0, timeInState1 = 0, state1Timeout = 1;	//seconds
 	// object tracking //
 	// towards: puck moving towards robot, away: puck moving away from robot, decision: latest x-value at which attack/defense must be picked
 	float xThreshold_towards = 50, xThreshold_away = 30, xThreshold_decision = 35;
 	float xPTfilt = 0, yPTfilt = 0, vPxfilt = 0, vPyfilt = 0;
-	float xFloatingVMin = -40, xFloatingVMax = 40, xFloatingLimit = 28;
+	float xFloatingVMin = -40, xFloatingVMax = 20, xFloatingLimit = 25;
 	int noPuckCounter = 0;
+	boolean forceRecenter = false;
 
 	int state = 0, prev_state = -1;
 	/*
@@ -312,11 +313,15 @@ int _tmain(int argc, _TCHAR* argv[])
 		//extract puck position from image, maintain state variables
 		int trackStatus = puckTracker.UpdatePuckState(imgOriginal);
 		int robotStatus = robotTracker.UpdatePuckState(imgOriginal);
-		bool positionUpdated = trackStatus & 1 == 1, velocityUpdated = trackStatus & 2 == 2;
-		//if(!(trackStatus & 1 == 1)) { continue; }	//go to next iteration if position wasn't updated
+		bool positionUpdated = (trackStatus & 1) == 1, velocityUpdated = (trackStatus & 2) == 2;
+		if(!velocityUpdated) { vPx = 100; vPy = 0; }
 		//if(!(trackStatus & 1 == 1)) { continue; }	//go to next iteration if position wasn't updated
 
-		noPuckCounter = velocityUpdated ? 0 : noPuckCounter + 1;
+		noPuckCounter = !velocityUpdated || (xPT > xFloatingLimit && vPx > 0) ? noPuckCounter + 1 : 0;
+		if (noPuckCounter == 3) {
+			forceRecenter = true;
+		}
+		//cout << "noPuckCounter = " << noPuckCounter << endl;
 
 		//if(state == 1) { cout << xPT << "," << yPT << "\t" << vPx << "\t" << vPy << endl; }
 		//cout << positionUpdated << "," << velocityUpdated << "\t" << puckTracker.xPC << "," << puckTracker.yPC;
@@ -325,8 +330,13 @@ int _tmain(int argc, _TCHAR* argv[])
 		//predict trajectory
 		Mat imgTrajectory = Mat::zeros( imgOriginal.size(), CV_8UC4 );
 
-		vPxHighCounter = vPx > xFloatingVMin ? vPxHighCounter + 1 : 0;
+		vPxHighCounter = vPx > xFloatingVMax ? vPxHighCounter + 1 : 0;
 		vPxNegCounter = vPx < xFloatingVMin ? vPxNegCounter + 1 : 0;
+		vPxFloatingCounter = vPxHighCounter || vPxNegCounter ? 0 : vPxFloatingCounter +1; 
+
+		if (vPxHighCounter % 100 == 1 || vPxNegCounter %100 == 1 || vPxFloatingCounter % 100 == 1) {
+			cout << "C: " << xPT << "," << yPT << "\t" << vPx << "," << vPy << "\t" << vPxHighCounter << "," << vPxNegCounter << "," << vPxFloatingCounter << endl;
+		}
 
 		#pragma region "State Machine"
 		int next_state = state;
@@ -335,15 +345,20 @@ int _tmain(int argc, _TCHAR* argv[])
 				//entry
 				if(prev_state != 0) { cout << "Entered state 0" << endl; }
 
-				// state actions -- check if arduino is ready //
-				//if(!arduinoReady) { arduinoReady = __; }
-				arduinoReady = true;
+				if (noPuckCounter == 0 && vPxFloatingCounter >= 5 && xPT <= xFloatingLimit) {
+					cout << "Puching the puck: " << xPT << "," << yPT << endl;
 
+					asInterface.sendDefendCommand(xPT + vPx / 10.0, yPT + vPy / 10.0, 0.001);
+					next_state = 0;
+					recenterLock = false;
+					break;
+				}
 			
 				// state transitions -- wait for puck to come towards robot //
-				next_state = arduinoReady && vPxNegCounter > 1 && xPT <= xThreshold_towards ? 1 : 0;	//transition to receive puck
+				next_state = vPxNegCounter > 1 && xPT <= xThreshold_towards ? 1 : 0;	//transition to receive puck
 				//next_state = xPT >= xThreshold_away && vPxHighCounter > 2 && !recenterLock ? 3 : next_state;	//recenter if puck moving away
-				next_state = (vPxHighCounter > 0 && !recenterLock || noPuckCounter >= 5) ? 3 : next_state;	//recenter if puck moving away
+				next_state = (vPxHighCounter > 0 && !recenterLock) ? 3 : next_state;	//recenter if puck moving away
+				if (forceRecenter) { next_state = 3; }
 
 				// exit actions
 				if(next_state == 1) {
@@ -429,8 +444,14 @@ int _tmain(int argc, _TCHAR* argv[])
 						defInRange = yDef >= YDEF_LOW && yDef <= YDEF_HIGH && tDef > TDEF_MIN;
 						attInRange = yAtt > YATT_LOW && yAtt < YATT_HIGH && tAtt > TATT_MIN;
 
-						if(attInRange) { asInterface.sendAttackCommand(xAtt,yAtt,tAtt); }
-						else if(defInRange) { asInterface.sendDefendCommand(xDef,yDef,tDef); }
+						if(attInRange) {
+							cout << "A: " << xAtt << "," << yAtt << "," << tAtt << endl;
+							asInterface.sendAttackCommand(xAtt,yAtt,tAtt); 
+						}
+						else if(defInRange) { 
+							cout << "D: " << xDef << "," << yDef << "," << tDef << endl;
+							asInterface.sendDefendCommand(xDef,yDef,tDef); 
+						}
 						else { noMoves = true; }	//both out of range, give up
 						prevCommandTime = getTickCount();
 					}
@@ -496,16 +517,11 @@ int _tmain(int argc, _TCHAR* argv[])
 				if(prev_state != 3) {
 					cout << endl << "Entered state 3" << endl << endl;
 					asInterface.recenterCmdAcked = false;
-					centerHomeY = vPx > 1 && vPx < 175;	//decide whether shot is slow enough to centerhome y-axis
+					centerHomeY = forceRecenter || (vPx > 1 && vPx < 175);	//decide whether shot is slow enough to centerhome y-axis
 					retransmitCounter = 3;
 				}
 
-				if (vPx >= xFloatingVMin && vPx <= xFloatingVMax && xPT <= xFloatingLimit) {
-					asInterface.sendDefendCommand(xPT, yPT, 0.001); recenterLock = false;
-					break;
-				}
-				
-				if(recenterLock) { next_state = 0; break; }
+				if(recenterLock && !forceRecenter) { next_state = 0; break; }
 
 				if(!asInterface.recenterCmdAcked) {
 					cout << "Retransmitting..." << endl;
@@ -513,7 +529,7 @@ int _tmain(int argc, _TCHAR* argv[])
 				}
 
 				next_state = asInterface.recenterCmdAcked ? 0 : 3;
-				if(next_state != 3) { recenterLock = true; }
+				if(next_state != 3) { recenterLock = true; forceRecenter = false; }
 				break;
 			}
 			case 4: {	//goal scored
