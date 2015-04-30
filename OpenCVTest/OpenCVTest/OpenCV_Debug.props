@@ -5,6 +5,7 @@
   <PropertyGroup>
     <LinkIncremental>
     </LinkIncremental>
+    <EmbedManifest>false</EmbedManifest>
   </PropertyGroup>
   <ItemDefinitionGroup>
     <ClCompile>

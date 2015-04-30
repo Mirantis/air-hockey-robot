@@ -37,11 +37,13 @@ float homeSpeed = 20, centerSpeed = 100;
 float oscSpd = 1100, xMinTicks = 60, xMaxTicks = 6900, yMaxTicks = 7400, yMinTicks = 200;
 float xBoundLow, xBoundHigh, yBoundLow, yBoundHigh;
 int xDriveEnablePin1 = 24, xDriveEnablePin2 = 26, yDriveEnablePin = 25;
-int x1homePin = 34, yCenterPin = 19, yhomePin = 32, goalScoredPin = 8;
+int x1homePin = 34, yCenterPin = 19, yhomePin = 32;
+int goalScoredPin = 8, playerSideGoalScoredPin = 9;
 volatile long yTickCorrection = 0;  //correction factor, updated when y-axis center limit switch is hit
 bool defend = false, attackStraight = false, attackAngled = false;
 float xT1 = 0, yT1 = 0, tT1 = 0, xT2 = 0, yT2 = 0, tT2 = 0, xTau2 = 0, yTau2 = 0;
 long dt = 10;  //iteration rate in ms
+long yCenterSwitchTicks = 3851;
 unsigned long prevTime = 0;
 
 int state = 3, prev_state = -1;
@@ -146,6 +148,8 @@ void loop() {
   
   // check if a goal was scored
   goalScored = goalScored ? goalScored : analogRead(8)> 900;
+  // code to check player side goal, currently works but is unused
+  //bool playerSideGoalScored = analogRead(playerSideGoalScoredPin) > 900;
   
   // ramp rate in ticks/s2
   xFreq = xServo.GetPulseFrequency(), yFreq = yServo.GetPulseFrequency();
@@ -167,6 +171,8 @@ void loop() {
       if(prev_state != 0) {
         Serial3.println("Entered State 0");
       }
+      //ySpd = 20;
+      //Serial3.print(yTicks); Serial3.print(","); Serial3.println(!digitalRead(yCenterPin));
       /*
       if(firstLoop) { break; }
       // ramp profile testing
@@ -937,6 +943,7 @@ void Home() {
     // latch homed vars once limit switch is hit
     xHomeCount = !digitalRead(x1homePin) ? xHomeCount + 1 : 0;
     x1Homed = x1Homed || xHomeCount > 2 ? true : false;
+    bool x2homed = !digitalRead(yCenterPin);
     //x1Homed = x1Homed ? true : !digitalRead(x1homePin);
     //x2Homed = x2Homed ? true : !digitalRead(x2homePin);
     

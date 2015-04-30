@@ -362,6 +362,9 @@ int _tmain(int argc, _TCHAR* argv[])
 		//if (vPxHighCounter % 100 == 1 || vPxNegCounter %100 == 1 || vPxFloatingCounter % 100 == 1) {
 		//	cout << "C: " << xPT << "," << yPT << "\t" << vPx << "," << vPy << "\t" << vPxHighCounter << "," << vPxNegCounter << "," << vPxFloatingCounter << endl;
 		//}
+		//cout << xPC << "," << yPC << "\t" << xPT << "," << yPT << endl;
+		//continue;
+
 		if (writeFrameInfo) { 
 			debugInfo << "Position: " << xPT << "," << yPT << "\t" << vPx << "," << vPy << endl;
 			debugInfo << "Counters: " << vPxHighCounter << "," << vPxNegCounter << "," << vPxFloatingCounter << endl;
@@ -376,7 +379,7 @@ int _tmain(int argc, _TCHAR* argv[])
 				if(prev_state != 0) { cout << "Entered state 0" << endl; }
 
 				if (noPuckCounter == 0 && vPxFloatingCounter >= 5 && xPT <= xFloatingLimit) {
-					float nx = xPT + vPx / 5.0;
+					float nx = xPT + vPx / 5.0 + 4;
 					float ny = yPT + vPy / 5.0;
 					if (ny < YATT_LOW) ny = YATT_LOW;
 					if (ny > YATT_HIGH) ny = YATT_HIGH;

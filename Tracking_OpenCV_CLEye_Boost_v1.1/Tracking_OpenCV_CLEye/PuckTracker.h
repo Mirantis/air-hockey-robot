@@ -9,9 +9,9 @@ using namespace std;
 // This class tracks the puck and predicts its trajectory
 #pragma region Defines
 #define CAM_PIX_TO_IN_X 0.1942
-#define CAM_PIX_TO_IN_Y 0.1942
-#define XC0 312				//pixel x value when puck is at table (0,0) corner
-#define YC0 212				//pixel y value when puck is at table (0,0) corner
+#define CAM_PIX_TO_IN_Y 0.195
+#define XC0 314				//pixel x value when puck is at table (0,0) corner
+#define YC0 213				//pixel y value when puck is at table (0,0) corner
 #define DOWNSAMPLE 1		//update velocity once per this many cycles
 #define AREA_MAX 250		//image thresholding bound
 #define AREA_MIN 8			//image thresholding bound
