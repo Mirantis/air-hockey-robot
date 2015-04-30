@@ -88,7 +88,7 @@ float yProfile[6] = { 0, 0, 0.11, 0.71, 2.03, 3.46 };
 
 bool homingEnabled = true;  //toggle to enable/disable homing
 bool dontMove = false;      //toggle to enable/disable motors during testing
-bool debugMode = false;
+bool debugMode = true;
 
 void setup() {
   Serial.begin(115200); Serial3.begin(57600);
@@ -211,6 +211,7 @@ void loop() {
       // state transitions
       // return to idle state
       next_state = target1reached ? 0 : 1;
+      next_state = recenterRequest || goalScored ? 3 : next_state;
       //next_state = getAbsolute(xR-xT1) && getAbsolute(yR-yT1) < 0.4;
       // stay in this state to continue updating position until it's time to attack
       //next_state = target1reached && attack && tT2 <= xTau2 + 0.80 ? 2 : next_state;
@@ -936,8 +937,8 @@ void Home() {
 
     float spdx = x1Homed ? 0 : -1*homeSpeed;
     float spdy = yHomed  ? 0 : -1*homeSpeed;
-    Serial3.print(spdx); Serial3.print(",");
-    Serial3.print(spdy); Serial3.print("\t");
+    Serial3.print(xServo.GetEncoderCount()); Serial3.print(",");
+    Serial3.print(yServo.GetEncoderCount()); Serial3.print("\t");
     
     xServo.SetSpeed(spdx,dt*1000,0); yServo.SetSpeed(spdy,dt*1000,0);
     
