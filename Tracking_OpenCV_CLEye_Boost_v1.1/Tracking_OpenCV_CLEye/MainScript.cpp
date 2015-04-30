@@ -296,7 +296,7 @@ int _tmain(int argc, _TCHAR* argv[])
 	// towards: puck moving towards robot, away: puck moving away from robot, decision: latest x-value at which attack/defense must be picked
 	float xThreshold_towards = 50, xThreshold_away = 30, xThreshold_decision = 35;
 	float xPTfilt = 0, yPTfilt = 0, vPxfilt = 0, vPyfilt = 0;
-	float xFloatingVMin = -20, xFloatingVMax = 10, xFloatingLimit = 25;
+	float xFloatingVMin = -20, xFloatingVMax = 20, xFloatingLimit = 25;
 	int noPuckCounter = 0;
 	boolean forceRecenter = false;
 
@@ -350,9 +350,11 @@ int _tmain(int argc, _TCHAR* argv[])
 		//predict trajectory
 		Mat imgTrajectory = Mat::zeros( imgOriginal.size(), CV_8UC4 );
 
-		vPxHighCounter = vPx > xFloatingVMax ? vPxHighCounter + 1 : 0;
-		vPxNegCounter = vPx < xFloatingVMin ? vPxNegCounter + 1 : 0;
-		vPxFloatingCounter = vPxHighCounter || vPxNegCounter ? 0 : vPxFloatingCounter + 1; 
+		if (velocityUpdated) {
+			vPxHighCounter = vPx > xFloatingVMax ? vPxHighCounter + 1 : 0;
+			vPxNegCounter = vPx < xFloatingVMin ? vPxNegCounter + 1 : 0;
+			vPxFloatingCounter = vPxHighCounter || vPxNegCounter ? 0 : vPxFloatingCounter + 1;
+		}
 
 		//if (vPxHighCounter % 100 == 1 || vPxNegCounter %100 == 1 || vPxFloatingCounter % 100 == 1) {
 		//	cout << "C: " << xPT << "," << yPT << "\t" << vPx << "," << vPy << "\t" << vPxHighCounter << "," << vPxNegCounter << "," << vPxFloatingCounter << endl;
@@ -377,9 +379,9 @@ int _tmain(int argc, _TCHAR* argv[])
 					if (ny > YATT_HIGH) ny = YATT_HIGH;
 					if (nx > xFloatingLimit) nx = xFloatingLimit;
 
-					cout << "Puching the puck: " << nx << "," << ny << endl;
+					cout << "Pushing the puck: " << nx << "," << ny << endl;
 					if (writeFrameInfo) { 
-						debugInfo << "Puching the puck: " << nx << "," << ny << endl;
+						debugInfo << "Pushing the puck: " << nx << "," << ny << endl;
 					}
 
 					asInterface.sendDefendCommand(nx, ny, 0.001);
@@ -392,7 +394,7 @@ int _tmain(int argc, _TCHAR* argv[])
 				next_state = vPxNegCounter > 1 && xPT <= xThreshold_towards ? 1 : 0;	//transition to receive puck
 				//next_state = xPT >= xThreshold_away && vPxHighCounter > 2 && !recenterLock ? 3 : next_state;	//recenter if puck moving away
 				next_state = (vPxHighCounter > 0 || (vPxFloatingCounter > 0 && xPT > xFloatingLimit)) && !recenterLock ? 3 : next_state;	//recenter if puck moving away
-				if (forceRecenter) { next_state = 3; }
+				if (forceRecenter && !recenterLock) { next_state = 3; }
 
 				// exit actions
 				if(next_state == 1) {
@@ -413,13 +415,14 @@ int _tmain(int argc, _TCHAR* argv[])
 					xDef = 0; yDef = 0; tDef = 0; xAtt = 0; yAtt = 0; tAtt = 0; xAtt2 = 0; yAtt2 = 0; tAtt2 = 0;
 					yDefArr.clear(); tDefArr.clear(); yAttArr.clear(); tAttArr.clear(); yAtt2Arr.clear(); tAtt2Arr.clear();
 					recenterLock = false; timeInState1 = 0;
+					filtPointsReq = 4;
 				}
 				bool decide = false, noMoves = false;
 				if(velocityUpdated) {	//only proceed if we got a position/velocity update
 					// adjust required number of filter points based on x-velocity
-					if(vPx < -350) { filtPointsReq = 2; }
-					else if(vPx < -200) { filtPointsReq = 3; }
-					else { filtPointsReq = 4; }
+					if(vPx < -350) { filtPointsReq = min(filtPointsReq, 2); }
+					else if(vPx < -200) { filtPointsReq = min(filtPointsReq, 3); }
+					else { filtPointsReq = min(filtPointsReq, 4); }
 					// state actions -- predict puck trajectory, decide on attack/defense when conditions met
 					puckTracker.PredictPuckTrajectory(&imgTrajectory, displayEnabled, numberOfCritXvalues, critXvalues,
 						critYvalues, critTvalues, critVyvalues);
@@ -502,9 +505,18 @@ int _tmain(int argc, _TCHAR* argv[])
 						//else if(critVyvalues[idx]/vPx > 0.33) { yDef += rPaddle; }
 
 						// make sure commands are within bounds
-						bool defInRange = yD >= YDEF_LOW && yD <= YDEF_HIGH && tD > TDEF_MIN;
+						if (yD < YDEF_LOW) yD = YDEF_LOW;
+						if (yD > YDEF_HIGH) yD = YDEF_HIGH;
+
+						bool defInRange = tD > TDEF_MIN;
 						bool attInRange = yA > YATT_LOW && yA < YATT_HIGH && tA > TATT_MIN;
 						bool att2InRange = yA2 > YATT2_LOW && yA < YATT2_HIGH && tA2 > TATT2_MIN;
+
+						if (writeFrameInfo) { 
+							debugInfo << "A: " << xA << "," << yA << "," << tA << endl;
+							debugInfo << "A2: " << xA2 << "," << yA2 << "," << tA2 << endl;
+							debugInfo << "D: " << xD << "," << yD << "," << tD << endl;
+						}
 
 						if(attInRange) {
 							cout << "A: " << xA << "," << yA << "," << tA << endl;
@@ -531,6 +543,7 @@ int _tmain(int argc, _TCHAR* argv[])
 							noMoves = true; 
 							if (writeFrameInfo) { 
 								debugInfo << "Give up!"<< endl;
+								debugInfo << "Defense info: " << xD << "," << yD << "," << tD << endl;
 							}
 						}	//both out of range, give up
 						prevCommandTime = getTickCount();
@@ -629,8 +642,7 @@ int _tmain(int argc, _TCHAR* argv[])
 				sprintf(fileName, "recording/frame_%.4d.jpg", tick);
 				imwrite(string(fileName), imgOriginal );
 			}
-			
-			/*
+						
 			imshow(OUTPUT_WINDOW, imgOriginal); //show the original image
 			//imshow("Contours",imgThresholded);
 		
@@ -643,11 +655,13 @@ int _tmain(int argc, _TCHAR* argv[])
 			else if(keyPress == 32) { //empty out lines
 				imgLines = Mat::zeros( imgLines.size(), CV_8UC4 );
 			}
-			*/
+			
 			
 		}
 
-		debugInfo << "End time: " <<  (double)getTickCount()/getTickFrequency() << endl;
+		if (writeFrameInfo) { 
+			debugInfo << "End time: " <<  (double)getTickCount()/getTickFrequency() << endl;
+		}
 
 		frameTimestamp = getTickCount();
 		loopTime = ((float)(frameTimestamp - oldFrameTimestamp))/getTickFrequency();

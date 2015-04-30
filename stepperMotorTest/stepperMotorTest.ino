@@ -88,7 +88,7 @@ float yProfile[6] = { 0, 0, 0.11, 0.71, 2.03, 3.46 };
 
 bool homingEnabled = true;  //toggle to enable/disable homing
 bool dontMove = false;      //toggle to enable/disable motors during testing
-bool debugMode = true;
+bool debugMode = false;
 
 void setup() {
   Serial.begin(115200); Serial3.begin(57600);
