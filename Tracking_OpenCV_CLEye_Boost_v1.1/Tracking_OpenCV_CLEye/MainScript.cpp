@@ -271,7 +271,7 @@ int _tmain(int argc, _TCHAR* argv[])
 	// Initialize puckTracker class -- maintains puck state variables
 	float rPuck = 1.60, rPaddle = 1.99;	//paddle radius, inches
 	PuckTracker puckTracker(rPuck, pbounds);
-	//PuckTracker robotTracker(rPuck, rbounds);
+	PuckTracker robotTracker(rPuck, rbounds);
 
 	int colorCycler = 0;
 	
@@ -580,7 +580,9 @@ int _tmain(int argc, _TCHAR* argv[])
 					if (writeFrameInfo) { 
 						debugInfo << "Recentering" << endl;
 					}
-					asInterface.sendRecenterCommand(centerHomeY);
+					int robotStatus = robotTracker.UpdatePuckState(imgOriginal);
+					if((robotStatus & 1) != 1) { next_state = 3; break; }	//break if position wasn't updated
+					asInterface.sendRecenterCommand(robotTracker.xPT, robotTracker.yPT, centerHomeY);
 				}
 
 				next_state = asInterface.recenterCmdAcked ? 0 : 3;

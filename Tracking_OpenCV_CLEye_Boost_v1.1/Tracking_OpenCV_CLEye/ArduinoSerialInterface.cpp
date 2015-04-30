@@ -140,14 +140,24 @@ bool ArduinoSerialInterface::sendAttackCommand(float xP2, float yP2, float tT2)
 	return writeComPort(message,18);
 }
 
-bool ArduinoSerialInterface::sendRecenterCommand(bool centerHomeY)
+bool ArduinoSerialInterface::sendRecenterCommand(float xRobotT, float yRobotT, bool centerHomeY)
 {
 	unsigned char message[15];
 	message[0] = 'r'; message[1] = 'c';
-	message[2] = centerHomeY;
-	message[3] = 0x08; message[4] = 0x09;
+	
+	unsigned char* xrArray = (unsigned char*)(&xRobotT);
+	unsigned char* yrArray = (unsigned char*)(&yRobotT);
 
-	return writeComPort(message,5);
+	arrayCopy(message,2,xrArray,4); arrayCopy(message,6,yrArray,4);
+	message[10] = centerHomeY;
+
+	unsigned int checksum = 0;
+	for(int i=2;i<15-4;i++) { checksum += message[i];  }
+	unsigned char* chkArray = (unsigned char*)(&checksum);
+	arrayCopy(message,11,chkArray,2);
+	message[13] = 0x08; message[14] = 0x09;
+
+	return writeComPort(message,15);
 }
 
 // inputs: defense point and time, attack point and time and angle
