@@ -13,3 +13,7 @@ Tracking_OpenCV_CLEye/asdf.txt
 /MotorControlArduino_Serial/MotorControlArduino/bin
 /MotorControlArduino_Serial/MotorControlArduino/obj
 /MotorControlArduino_Serial/MotorControlArduino.suo
+/OpenCVWebcamTest/Debug
+/OpenCVWebcamTest/OpenCVWebcamTest/Debug
+/OpenCVWebcamTest/*.suo
+/OpenCVWebcamTest/ipch/opencvwebcamtest-331ba885/*.ipch
