@@ -18,3 +18,8 @@ Tracking_OpenCV_CLEye/asdf.txt
 /OpenCVWebcamTest/*.suo
 /OpenCVWebcamTest/ipch/opencvwebcamtest-331ba885/*.ipch
 /OpenCVWebcamTest/*.sdf
+/OpenCVTest/Debug
+/OpenCVTest/OpenCVTest/Debug
+/OpenCVTest/ipch/opencvtest-33b3eed8/*.ipch
+/OpenCVTest/*.suo
+/OpenCVTest/*.sdf
