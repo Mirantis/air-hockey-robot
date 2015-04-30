@@ -324,7 +324,7 @@ int _tmain(int argc, _TCHAR* argv[])
 
 		//extract puck position from image, maintain state variables
 		int trackStatus = puckTracker.UpdatePuckState(imgOriginal);
-		int robotStatus = robotTracker.UpdatePuckState(imgOriginal);
+		//int robotStatus = robotTracker.UpdatePuckState(imgOriginal);
 		bool positionUpdated = (trackStatus & 1) == 1, velocityUpdated = (trackStatus & 2) == 2;
 		if(!velocityUpdated) { vPx = 100; vPy = 0; }
 		//if(!(trackStatus & 1 == 1)) { continue; }	//go to next iteration if position wasn't updated
@@ -528,7 +528,9 @@ int _tmain(int argc, _TCHAR* argv[])
 				if(!asInterface.recenterCmdAcked) {
 					cout << "Retransmitting..." << endl;
 					debugInfo << "Recentering" << endl;
-					asInterface.sendRecenterCommand(centerHomeY);
+					int robotStatus = robotTracker.UpdatePuckState(imgOriginal);
+					if((robotStatus & 1) != 1) { next_state = 3; break; }	//break if position wasn't updated
+					asInterface.sendRecenterCommand(robotTracker.xPT, robotTracker.yPT, centerHomeY);
 				}
 
 				next_state = asInterface.recenterCmdAcked ? 0 : 3;

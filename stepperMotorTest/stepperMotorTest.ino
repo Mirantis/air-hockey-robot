@@ -30,6 +30,7 @@ CNCServo yServo(4,yRampRate,leftDir,encoderPPR, 1/microstep);   //timer 4, pins 
 float xSpd = 0, ySpd = 0;
 float xSpd_max = 800, ySpd_max = 900;
 float xR = 0, yR = 0;  //robot position
+float xR_CV = 0, yR_CV = 0;
 float xCenter, yCenter;
 float rp = 1.40;       //pulley radius
 float paddleXoffset = -2.45, paddleYoffset = -2.25;  //-1*(paddle_offset) from table 0,0
@@ -40,6 +41,9 @@ int xDriveEnablePin1 = 24, xDriveEnablePin2 = 26, yDriveEnablePin = 25;
 int x1homePin = 34, yCenterPin = 19, yhomePin = 32, goalScoredPin = 8;
 volatile long yTickCorrection = 0;  //correction factor, updated when y-axis center limit switch is hit
 bool defend = false, attackStraight = false, attackAngled = false;
+bool disableLimits = false;
+bool cvDeltaSet = false;
+float cvDelta = -1;
 float xT1 = 0, yT1 = 0, tT1 = 0, xT2 = 0, yT2 = 0, tT2 = 0, xTau2 = 0, yTau2 = 0;
 long dt = 10;  //iteration rate in ms
 unsigned long prevTime = 0;
@@ -91,7 +95,7 @@ bool dontMove = false;      //toggle to enable/disable motors during testing
 bool debugMode = true;
 
 void setup() {
-  Serial.begin(19200); Serial3.begin(57600);
+  Serial.begin(115200); Serial3.begin(57600);
   pinMode(xDriveEnablePin1,OUTPUT); pinMode(xDriveEnablePin2,OUTPUT);
   digitalWrite(xDriveEnablePin1,HIGH); digitalWrite(xDriveEnablePin2,HIGH);
   pinMode(yDriveEnablePin,OUTPUT); digitalWrite(yDriveEnablePin,HIGH);
@@ -114,7 +118,7 @@ void setup() {
   xBoundHigh = (float)xMaxTicks/(encoderPPR*microstep)*rp*2*PI;
   yBoundHigh = (float)yMaxTicks/(encoderPPR*microstep)*rp*2*PI;
   
-  xCenter = 3 + paddleXoffset; yCenter = 19.625 + paddleXoffset;
+  xCenter = 3 + paddleXoffset; yCenter = 19.625 + paddleYoffset;
   //defend = true; xT1 = 20; yT1 = 30; tT1 = 0.4;
   
   // homing routine
@@ -209,6 +213,7 @@ void loop() {
       // state transitions
       // return to idle state
       next_state = target1reached ? 0 : 1;
+      next_state = recenterRequest || goalScored ? 3 : 0;
       //next_state = getAbsolute(xR-xT1) && getAbsolute(yR-yT1) < 0.4;
       // stay in this state to continue updating position until it's time to attack
       //next_state = target1reached && attack && tT2 <= xTau2 + 0.80 ? 2 : next_state;
@@ -294,7 +299,7 @@ void loop() {
         Serial3.println("Entered State 3"); t3 = 0;
         xRampDown = false; yRampDown = false;
         rxHomed = false; ryCentered = false; ryHomed = false;
-        recenterState = 0;
+        recenterState = 0; cvDeltaSet = false;
         if(goalScored) { centerHomeY = true; }
       }
       if(firstLoop) { break; }  //don't do anything on first loop due to loopTime being a huge number
@@ -319,20 +324,36 @@ void loop() {
         // change target y if homing
         if(recenterState == 1 && homingEnabled && centerHomeY) {  //move near center switch
           yC = 23 + paddleYoffset;
-        }  
+          if(cvDeltaSet) { yC += cvDelta; }
+        }
         // move with pid control to xC, yC
         pidTargetReached = moveWithPidRampDown(xC, yC, 0.01, loopTimeSecs, false);
+        
+        // compare current presumed location with CV's reported location -- this ensures
+        // that paddle ends up on right side of center switch
+        if(pidTargetReached && !cvDeltaSet && recenterState == 1 && homingEnabled && centerHomeY) {
+          if(yR_CV < 21 || yR_CV > 30) {
+            cvDelta = yR - yR_CV; pidTargetReached = false; disableLimits = true;
+            xRampDown = false; yRampDown = false;
+          }
+          cvDeltaSet = true; SendAck(recenterCmd);
+        }
+        
         // recenter state transitions
         next_recenterState = pidTargetReached && recenterState == 1 ? 2 : recenterState;
         next_recenterState = pidTargetReached && recenterState == 3 ? 4 : next_recenterState;
+        
         // rstate exit
-        if(pidTargetReached) { xSpd = 0; ySpd = 0; }
+        if(pidTargetReached) {
+          xSpd = 0; ySpd = 0; disableLimits = false;
+        }
       }
       else if(recenterState == 2) {    //home x and centerhome y
         // home x-axis, hit center switch on y-axis
         if(homingEnabled) {
           // only home y if requested
           if(centerHomeY) {
+            disableLimits = true;
             bool prevyCentered = ryCentered, prevxHomed = rxHomed, prevyHomed = ryHomed;
             ryCentered = ryCentered ? ryCentered : !digitalRead(yCenterPin);
             // also watch home pin in case paddle starts on wrong side of center switch
@@ -365,6 +386,7 @@ void loop() {
           // rstate exit actions
           if(next_recenterState != 2) {
             //xServo.ClearEncoderCount(); //yServo.ClearEncoderCount();
+            disableLimits = false;
             rxHomed = false; ryCentered = false;
           }
         }
@@ -380,6 +402,7 @@ void loop() {
         xSpd = 0; ySpd = 0;
         rxHomed = false; ryCentered = false; ryHomed = false;  //in case rstate 2 was interrupted
         next_recenterState = 0; recenterRequest = false; goalScored = false;
+        cvDeltaSet = false;
       }
       break;
     }
@@ -389,7 +412,7 @@ void loop() {
       if(prev_state != 4) {
         Serial3.println("Entered State 4");
         xRampDown = false; yRampDown = false;
-        tT2 -= 5*(float)dt/1000; //speed up arrival time
+        //tT2 -= 5*(float)dt/1000; //speed up arrival time
       }
       if(tT2 <= 0) {
         xRampDown = true; yRampDown = true;
@@ -406,16 +429,18 @@ void loop() {
       if(moveX) {
         // change y ramp rate to arrive at target location at correct time
         float vy = yFreq/(encoderPPR*microstep)*2*PI*rp;
-        float ay = 2*(yT2 - yR - vy*tT2)/(tT2*tT2);
+        int dir = yT2 > yR ? 1 : -1;
+        float ay = 2*(yT2 + dir*1.6 - yR - vy*tT2)/(tT2*tT2);
         yRampRate = getAbsolute(ay*60/(2*PI*rp));
         yRampRate = yRampRate > yRampInit ? yRampInit : yRampRate;
         yRampRate = yRampRate < 1 ? 1 : yRampRate;
         yServo.SetRampRate(yRampRate);
-        int dir = ay > 0 ? 1 : -1;
         float yTarget = ay > 0 ? yBoundHigh : yBoundLow;  //set new yTarget to move through puck point
         ySpd = dir*ySpd_max;
         
-        bool olTargetReached = moveWithOpenLoopRampDown(xT2, yT2, 0.01, loopTimeSecs);
+        bool olTargetReached = moveWithOpenLoopRampDown(xT2, yTarget, 0.01, loopTimeSecs);
+        Serial3.print(tT2); Serial3.print("\t"); Serial3.print(xR - paddleXoffset); Serial3.print(","); Serial3.print(yR - paddleYoffset);
+        Serial3.print("\t"); Serial3.print(vy); Serial3.print(","); Serial3.println(ay);
       }
       
       if(debugMode) {
@@ -451,7 +476,7 @@ void loop() {
   if(attackStraight || attackAngled) { tT2 -= loopTimeSecs; }
   
   // apply bounding -- avoid limits
-  if(recenterState != 2) {  //don't do this when homing in recenter state
+  if(!disableLimits) {  //don't do this when homing in recenter state
     float xUpperLim = xMaxTicks - getAbsolute(xFreq)*loopTimeSecs;
     float xLowerLim = xMinTicks + getAbsolute(xFreq)*loopTimeSecs;
     float yUpperLim = yMaxTicks - getAbsolute(yFreq)*loopTimeSecs;
@@ -662,15 +687,30 @@ void respondToSerialCmd()
     unsigned long recStart = micros();
     //Serial3.println("Recenter cmd received.");
     //if(state != 0 && state != 1) { FlushSerialInput(); return; }
-    unsigned char data = Serial.read();
-    // check suffix bytes
-    unsigned int suff1 = Serial.read(), suff2 = Serial.read();
-    Serial3.print(suff1); Serial3.println(suff2);
-    if(suff1 != 0x08 || suff2 != 0x09) { FlushSerialInput(); return;}
+    unsigned char dataArray[9];
+    unsigned int checksum = 0;
+    for(int i=0;i<9;i++) {
+      dataArray[i]  = Serial.read();
+      checksum += dataArray[i];
+    }
     
-    centerHomeY = data == 1 ? true : false;
+    //read checksum
+    unsigned int chkLow = Serial.read();
+    unsigned int chkHigh  = Serial.read();
+    unsigned int checksumPacket = chkHigh << 8 | chkLow;
+    //Serial3.print(checksum); Serial3.print("\t"); Serial3.println(checksumPacket);
+    
+    //check suffix bytes
+    unsigned int suff1 = Serial.read(), suff2 = Serial.read();
+    if(suff1 != 0x08 || suff2 != 0x09) { FlushSerialInput(); return;}
+    if(checksumPacket != checksum) { FlushSerialInput(); return; }
+    
+    //proceed
+    xR_CV = *((float*)&dataArray[0]); yR_CV = *((float*)&dataArray[4]);
+    centerHomeY = dataArray[8] == 1 ? true : false;
+    
     recenterRequest = true;
-    SendAck(recenterCmd);
+    //SendAck(recenterCmd);
     FlushSerialInput();
     Serial3.print("Recenter cmd time: "); Serial3.println(micros() - recStart);
   }
@@ -773,7 +813,7 @@ void respondToSerialCmd()
   else if(cmd == startAttackCmd) {
     unsigned long attStart = micros();
     //receive desired attack point, time of arrival, possibly angle of attack
-    //Serial3.println("Attack cmd received.");
+    Serial3.print("Attack cmd received: "); Serial3.println(attStart);
     unsigned char dataArray[12];
     unsigned int checksum = 0;
     for(int i=0;i<12;i++) {

@@ -154,7 +154,7 @@ bool ArduinoSerialInterface::sendRecenterCommand(float xRobotT, float yRobotT, b
 	unsigned int checksum = 0;
 	for(int i=2;i<15-4;i++) { checksum += message[i];  }
 	unsigned char* chkArray = (unsigned char*)(&checksum);
-	arrayCopy(message,30,chkArray,2);
+	arrayCopy(message,11,chkArray,2);
 	message[13] = 0x08; message[14] = 0x09;
 
 	return writeComPort(message,15);
