@@ -271,7 +271,7 @@ int _tmain(int argc, _TCHAR* argv[])
 	// Initialize puckTracker class -- maintains puck state variables
 	float rPuck = 1.60, rPaddle = 1.99;	//paddle radius, inches
 	PuckTracker puckTracker(rPuck, pbounds);
-	PuckTracker robotTracker(rPuck, rbounds);
+	//PuckTracker robotTracker(rPuck, rbounds);
 
 	int colorCycler = 0;
 	
@@ -311,14 +311,6 @@ int _tmain(int argc, _TCHAR* argv[])
 	*/
 	while(true) {
 
-		static int tick = 0;
-		tick++;
-		if (writeFrameInfo) { 
-			debugInfo << "**************" << endl;
-			debugInfo << "Frame " << tick << endl;
-			debugInfo << "Time: " <<  (double)getTickCount()/getTickFrequency() << endl;
-		}
-
 		// Copy image from camera thread locally
 		Mat imgOriginal;
 		mtx.lock();
@@ -326,6 +318,14 @@ int _tmain(int argc, _TCHAR* argv[])
 		imgCapture.copyTo(imgOriginal);
 		cameraUpdated = false;
 		mtx.unlock();
+
+		static int tick = 0;
+		tick++;
+		if (writeFrameInfo) { 
+			debugInfo << "**************" << endl;
+			debugInfo << "Frame " << tick << endl;
+			debugInfo << "Time: " <<  (double)getTickCount()/getTickFrequency() << endl;
+		}
 
 		// check com port for updates
 		asInterface.readComPort(state);
@@ -340,6 +340,9 @@ int _tmain(int argc, _TCHAR* argv[])
 		noPuckCounter = !velocityUpdated || (xPT > xFloatingLimit && vPx > 0) ? noPuckCounter + 1 : 0;
 		if (noPuckCounter == 3) {
 			forceRecenter = true;
+			vPxHighCounter = 1;
+			vPxNegCounter = 0;
+			vPxFloatingCounter = 0;
 		}
 		//cout << "noPuckCounter = " << noPuckCounter << endl;
 
@@ -580,9 +583,7 @@ int _tmain(int argc, _TCHAR* argv[])
 					if (writeFrameInfo) { 
 						debugInfo << "Recentering" << endl;
 					}
-					int robotStatus = robotTracker.UpdatePuckState(imgOriginal);
-					if((robotStatus & 1) != 1) { next_state = 3; break; }	//break if position wasn't updated
-					asInterface.sendRecenterCommand(robotTracker.xPT, robotTracker.yPT, centerHomeY);
+					asInterface.sendRecenterCommand(centerHomeY);
 				}
 
 				next_state = asInterface.recenterCmdAcked ? 0 : 3;
