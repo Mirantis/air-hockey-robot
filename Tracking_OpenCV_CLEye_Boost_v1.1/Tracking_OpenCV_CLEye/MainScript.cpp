@@ -271,6 +271,7 @@ int _tmain(int argc, _TCHAR* argv[])
 	// Initialize puckTracker class -- maintains puck state variables
 	float rPuck = 1.60, rPaddle = 1.99;	//paddle radius, inches
 	PuckTracker puckTracker(rPuck, pbounds);
+	PuckTracker robotTracker(rPuck, rbounds);
 
 	int colorCycler = 0;
 	
