@@ -134,9 +134,9 @@ int PuckTracker::UpdatePuckState(Mat imgOriginal)
 
 void PuckTracker::UpdateVelocityFilter(double dt)
 {
-	if(prev_vPx*vPx > 1) { /*vPx = (prev_vPx + 2*vPx)/3; */ xRicochetOccurred = false; }	//check if velocity changed direction
+	if(prev_vPx*vPx > -1) { /*vPx = (prev_vPx + 2*vPx)/3; */ xRicochetOccurred = false; }	//check if velocity changed direction
 	else { xRicochetOccurred = true; }
-	if(prev_vPy*vPy > 1) { /*vPy = (prev_vPy + 2*vPy)/3; */ yRicochetOccurred = false;}
+	if(prev_vPy*vPy > -1) { /*vPy = (prev_vPy + 2*vPy)/3; */ yRicochetOccurred = false;}
 	else { yRicochetOccurred = true; }
 }
 
@@ -226,7 +226,7 @@ int PuckTracker::PredictPuckTrajectory(Mat *imgTrajectory, bool displayEnabled, 
 				float critX = critXvalues[critXindex];
 				float tOnThisPath = (critX - x) / vx;
 				float v = sqrt(pow(vx,2) + pow(vy,2));
-				critTvalues[critXindex] = t + tOnThisPath - abs(rPuck/v);
+				critTvalues[critXindex] = t + tOnThisPath - abs(rPuck/v) - 0.05;
 				critYvalues[critXindex] = y + vy * tOnThisPath;
 				critVyvalues[critXindex] = vy;
 			

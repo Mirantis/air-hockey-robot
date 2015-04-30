@@ -188,8 +188,10 @@ void loop() {
         Serial3.println(ySpdCommand);
       }
       */
-      Serial3.print(xTicks); Serial3.print(","); Serial3.print(yTicks); Serial3.print("\t");
-      Serial3.print(xR - paddleXoffset); Serial3.print(","); Serial3.println(yR - paddleYoffset);
+      if(debugMode) {
+        Serial3.print(xTicks); Serial3.print(","); Serial3.print(yTicks); Serial3.print("\t");
+        Serial3.print(xR - paddleXoffset); Serial3.print(","); Serial3.println(yR - paddleYoffset);
+      }
       next_state = recenterRequest || goalScored ? 3 : 0;
       next_state = defend ? 1 : next_state;
       next_state = attackAngled ? 4 : next_state;
@@ -213,7 +215,7 @@ void loop() {
       // state transitions
       // return to idle state
       next_state = target1reached ? 0 : 1;
-      next_state = recenterRequest || goalScored ? 3 : 0;
+      next_state = recenterRequest || goalScored ? 3 : next_state;
       //next_state = getAbsolute(xR-xT1) && getAbsolute(yR-yT1) < 0.4;
       // stay in this state to continue updating position until it's time to attack
       //next_state = target1reached && attack && tT2 <= xTau2 + 0.80 ? 2 : next_state;
@@ -435,12 +437,13 @@ void loop() {
         yRampRate = yRampRate > yRampInit ? yRampInit : yRampRate;
         yRampRate = yRampRate < 1 ? 1 : yRampRate;
         yServo.SetRampRate(yRampRate);
+        dir = ay > 0 ? 1 : -1;
         float yTarget = ay > 0 ? yBoundHigh : yBoundLow;  //set new yTarget to move through puck point
         ySpd = dir*ySpd_max;
         
         bool olTargetReached = moveWithOpenLoopRampDown(xT2, yTarget, 0.01, loopTimeSecs);
-        Serial3.print(tT2); Serial3.print("\t"); Serial3.print(xR - paddleXoffset); Serial3.print(","); Serial3.print(yR - paddleYoffset);
-        Serial3.print("\t"); Serial3.print(vy); Serial3.print(","); Serial3.println(ay);
+        Serial3.print(tT2); Serial3.print("\t");Serial3.print(xR - paddleXoffset);Serial3.print(",");Serial3.print(yR - paddleYoffset);
+        Serial3.print("\t"); Serial3.print(vy); Serial3.print(",");Serial3.println(ay);
       }
       
       if(debugMode) {
@@ -685,7 +688,7 @@ void respondToSerialCmd()
  
   if(cmd == recenterCmd) {
     unsigned long recStart = micros();
-    //Serial3.println("Recenter cmd received.");
+    Serial3.print("Recenter cmd received: "); Serial3.println(recStart);
     //if(state != 0 && state != 1) { FlushSerialInput(); return; }
     unsigned char dataArray[9];
     unsigned int checksum = 0;
@@ -767,7 +770,7 @@ void respondToSerialCmd()
   else if(cmd == startDefenseCmd)
   {
     unsigned long defStart = micros();
-    //Serial3.println("Defense cmd received.");
+    Serial3.print("Defense cmd received: "); Serial3.println(defStart);
     
     //ignore if attacking
     if(attackStraight || attackAngled) { SendAck(startDefenseCmd); FlushSerialInput(); return; }
@@ -813,7 +816,8 @@ void respondToSerialCmd()
   else if(cmd == startAttackCmd) {
     unsigned long attStart = micros();
     //receive desired attack point, time of arrival, possibly angle of attack
-    Serial3.print("Attack cmd received: "); Serial3.println(attStart);
+    Serial3.print("Arrack cmd received: "); Serial3.println(attStart);
+    
     unsigned char dataArray[12];
     unsigned int checksum = 0;
     for(int i=0;i<12;i++) {
@@ -970,8 +974,8 @@ void Home() {
 
     float spdx = x1Homed ? 0 : -1*homeSpeed;
     float spdy = yHomed  ? 0 : -1*homeSpeed;
-    Serial3.print(spdx); Serial3.print(",");
-    Serial3.print(spdy); Serial3.print("\t");
+    Serial3.print(xServo.GetEncoderCount()); Serial3.print(",");
+    Serial3.print(yServo.GetEncoderCount()); Serial3.print("\t");
     
     xServo.SetSpeed(spdx,dt*1000,0); yServo.SetSpeed(spdy,dt*1000,0);
     
